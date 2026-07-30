@@ -1,0 +1,8 @@
+{
+  "name": "SAM Finance",
+  "short_name": "SAM Finance",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0E1613",
+  "theme_color": "#1F8A70"
+}
