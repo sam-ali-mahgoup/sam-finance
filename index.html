@@ -31,8 +31,8 @@
   --radius-sm:12px;
   --font-display:'Zain','Tahoma',sans-serif;
   --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Tahoma,sans-serif;
-  --safe-top:env(safe-area-inset-top);
-  --safe-bottom:env(safe-area-inset-bottom);
+  --safe-top:max(env(safe-area-inset-top), 20px);
+  --safe-bottom:max(env(safe-area-inset-bottom), 10px);
 }
 [data-theme="light"]{
   --bg:#F6F3EA;
@@ -283,7 +283,7 @@ button{cursor:pointer;border:none;background:none;}
   z-index:41;transition:transform .35s cubic-bezier(.34,1.56,.64,1);
 }
 .fab:active{transform:translateX(-50%) scale(.86) rotate(-6deg);}
-#app{max-width:520px;padding-bottom:calc(114px + var(--safe-bottom));}
+#app{max-width:520px;padding-bottom:calc(130px + var(--safe-bottom));}
 
 /* ---------- WALLETS VIEW ---------- */
 .wallet-card{
@@ -603,6 +603,10 @@ function defaultState(){
       {id:'cat_freelance',name:'فريلانس',icon:'💻',type:'income'},
       {id:'cat_gift',name:'هدية',icon:'🎁',type:'income'},
       {id:'cat_other_i',name:'أخرى',icon:'💰',type:'income'},
+      {id:'cat_debt_in',name:'دين مقبوض',icon:'🤝',type:'income'},
+      {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
+      {id:'cat_savings',name:'ادخار',icon:'🏁',type:'expense'},
+      {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
     ],
     transactions:[],
     budgets:[],
@@ -630,6 +634,14 @@ function load(){
   if(state.settings.autoLockOnBackground===undefined) state.settings.autoLockOnBackground = true;
   state.wallets.forEach(w=>{ if(w.lowBalanceAlert===undefined) w.lowBalanceAlert = null; });
   state.categories.forEach(c=>{ if(c.parentId===undefined) c.parentId = null; });
+  const requiredCats = [
+    {id:'cat_debt_in',name:'دين مقبوض',icon:'🤝',type:'income'},
+    {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
+    {id:'cat_savings',name:'ادخار',icon:'🏁',type:'expense'},
+    {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
+  ];
+  requiredCats.forEach(rc=>{ if(!state.categories.find(c=>c.id===rc.id)) state.categories.push({...rc, parentId:null}); });
+  state.debts.forEach(d=>{ if(d.paidAmount===undefined) d.paidAmount = 0; if(d.walletId===undefined) d.walletId = null; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
 }
@@ -1539,22 +1551,30 @@ function deleteRecurring(id){
 function debtsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openDebtForm()">+ دين جديد</button>`;
   if(state.debts.length===0){ html+=emptyStateHTML('مفيش ديون مسجلة',''); return html; }
-  const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+d.amount,0);
-  const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+d.amount,0);
+  const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
   html += `<div class="stat-grid" style="margin-bottom:14px;">
-    <div class="stat-box"><div class="sv" style="color:var(--red);">${fmt(owe)}</div><div class="sl">عليك</div></div>
-    <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(owed)}</div><div class="sl">ليك</div></div>
+    <div class="stat-box"><div class="sv" style="color:var(--red);">${fmt(owe)}</div><div class="sl">باقي عليك</div></div>
+    <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(owed)}</div><div class="sl">باقي ليك</div></div>
   </div>`;
-  html += state.debts.slice().sort((a,b)=>(a.settled-b.settled)).map(d=>`
-    <div class="debt-card" style="opacity:${d.settled?0.5:1};" onclick="openDebtForm('${d.id}')">
-      <div class="debt-top">
-        <div class="debt-name">${esc(d.person)}</div>
-        <div class="debt-tag ${d.direction}">${d.direction==='owe'?'عليك':'ليك'}${d.settled?' · تم':''}</div>
+  html += state.debts.slice().sort((a,b)=>(a.settled-b.settled)).map(d=>{
+    const paid = d.paidAmount||0;
+    const remaining = Math.max(0, d.amount-paid);
+    const pct = Math.min(100,(paid/d.amount)*100);
+    return `<div class="debt-card" style="opacity:${d.settled?0.6:1};">
+      <div onclick="openDebtForm('${d.id}')">
+        <div class="debt-top">
+          <div class="debt-name">${esc(d.person)}</div>
+          <div class="debt-tag ${d.direction}">${d.direction==='owe'?'عليك':'ليك'}${d.settled?' · اتسدد بالكامل':''}</div>
+        </div>
+        <div class="debt-amt" style="color:${d.direction==='owe'?'var(--red)':'var(--brand-2)'};">${fmt(remaining)} ${d.currency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> متبقي من ${fmt(d.amount)}</span></div>
+        ${paid>0?`<div class="goal-track" style="margin-top:8px;"><div class="goal-fill" style="width:${pct}%;"></div></div>`:''}
+        ${d.dueDate?`<div class="debt-meta">📅 موعد السداد: ${fmtDate(d.dueDate)}</div>`:''}
+        ${d.note?`<div class="debt-meta">${esc(d.note)}</div>`:''}
       </div>
-      <div class="debt-amt" style="color:${d.direction==='owe'?'var(--red)':'var(--brand-2)'};">${fmt(d.amount)} ${d.currency}</div>
-      ${d.dueDate?`<div class="debt-meta">📅 موعد السداد: ${fmtDate(d.dueDate)}</div>`:''}
-      ${d.note?`<div class="debt-meta">${esc(d.note)}</div>`:''}
-    </div>`).join('');
+      ${!d.settled?`<button class="btn-secondary" style="margin-top:10px;" onclick="event.stopPropagation();openDebtPaymentForm('${d.id}')">💵 تسجيل دفعة</button>`:''}
+    </div>`;
+  }).join('');
   return html;
 }
 function openDebtForm(id){
@@ -1563,35 +1583,82 @@ function openDebtForm(id){
     <div class="sheet-handle"></div>
     <div class="sheet-title">${ex?'تعديل الدين':'دين جديد'}</div>
     <div class="type-toggle" id="debtDir">
-      <button type="button" class="${(!ex||ex.direction==='owe')?'active':''}" data-t="owe" onclick="toggleType(this,'debtDir')">أنا مديون</button>
-      <button type="button" class="${ex&&ex.direction==='owed'?'active':''}" data-t="owed" onclick="toggleType(this,'debtDir')">مديون لي</button>
+      <button type="button" class="${(!ex||ex.direction==='owe')?'active':''}" data-t="owe" onclick="toggleType(this,'debtDir')">أنا مديون (استلمت فلوس)</button>
+      <button type="button" class="${ex&&ex.direction==='owed'?'active':''}" data-t="owed" onclick="toggleType(this,'debtDir')">مديون لي (اديت فلوس)</button>
     </div>
     <div class="field"><label>الاسم</label><input id="debtPerson" value="${ex?esc(ex.person):''}" placeholder="اسم الشخص"></div>
     <div class="row2">
-      <div class="field"><label>المبلغ</label><input id="debtAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+      <div class="field"><label>المبلغ الكلي</label><input id="debtAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00" onblur="evalCalcField(this)" ${ex?'disabled':''}></div>
       <div class="field"><label>العملة</label>
-        <select id="debtCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
+        <select id="debtCurrency" ${ex?'disabled':''}>${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
       </div>
     </div>
+    ${!ex?`<div class="field"><label>سجّل الحركة في محفظة؟ (اختياري)</label>
+      <div class="chip-select" id="debtWalletChips">
+        <button type="button" class="sel" data-w="" onclick="selectChip(this,'debtWalletChips')">بدون</button>
+        ${state.wallets.map(w=>`<button type="button" data-w="${w.id}" onclick="selectChip(this,'debtWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">لو اخترت محفظة، هيتسجل المبلغ كحركة فعلية فيها دلوقتي (قبض لو أنت مديون، صرف لو مديون لك).</div>
+    </div>`:`<div style="font-size:11px;color:var(--ink-faint);margin-top:-6px;margin-bottom:14px;">المبلغ والعملة مقفولين بعد الإنشاء عشان يفضلوا متوافقين مع أي حركات مسجلة. لتسجيل دفعة استخدم زرار "تسجيل دفعة" في الكارت.</div>`}
     <div class="field"><label>موعد السداد (اختياري)</label><input id="debtDue" type="date" value="${ex&&ex.dueDate?ex.dueDate:''}"></div>
     <div class="field"><label>ملاحظة</label><input id="debtNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="اختياري"></div>
     <button class="btn-primary" onclick="saveDebt(${ex?`'${ex.id}'`:'null'})">حفظ</button>
-    ${ex?`<button class="btn-secondary" onclick="toggleSettleDebt('${ex.id}')">${ex.settled?'إعادة فتح':'✓ اتسدد'}</button><button class="btn-danger-text" onclick="deleteDebt('${ex.id}')">حذف</button>`:''}
+    ${ex?`<button class="btn-secondary" onclick="toggleSettleDebt('${ex.id}')">${ex.settled?'إعادة فتح':'✓ تحديد كمسدد يدويًا (من غير حركة)'}</button><button class="btn-danger-text" onclick="deleteDebt('${ex.id}')">حذف الدين (من غير حذف الحركات المسجلة)</button>`:''}
   `);
 }
 function saveDebt(id){
   const direction = document.querySelector('#debtDir .active').dataset.t;
   const person = document.getElementById('debtPerson').value.trim();
-  const amount = parseFloat(document.getElementById('debtAmount').value);
-  const currency = document.getElementById('debtCurrency').value;
   const dueDate = document.getElementById('debtDue').value || null;
   const note = document.getElementById('debtNote').value.trim();
   if(!person){toast('اكتب اسم');return;}
-  if(!amount||amount<=0){toast('اكتب مبلغ صحيح');return;}
-  const obj = {direction, person, amount, currency, dueDate, note};
-  if(id){ Object.assign(state.debts.find(d=>d.id===id), obj); }
-  else { state.debts.push({id:uid(), settled:false, ...obj}); }
+  if(id){
+    Object.assign(state.debts.find(d=>d.id===id), {direction, person, dueDate, note});
+  } else {
+    const amount = parseFloat(document.getElementById('debtAmount').value);
+    const currency = document.getElementById('debtCurrency').value;
+    if(!amount||amount<=0){toast('اكتب مبلغ صحيح');return;}
+    const walletChip = document.getElementById('debtWalletChips').querySelector('.sel');
+    const walletId = walletChip && walletChip.dataset.w ? walletChip.dataset.w : null;
+    const debt = {id:uid(), direction, person, amount, currency, dueDate, note, settled:false, paidAmount:0, walletId};
+    state.debts.push(debt);
+    if(walletId){
+      const txType = direction==='owe' ? 'income' : 'expense';
+      state.transactions.push({id:uid(), type:txType, walletId, categoryId: direction==='owe'?'cat_debt_in':'cat_debt_out', amount, note:'دين: '+person, date:new Date().toISOString().slice(0,10), debtId:debt.id});
+    }
+  }
   save(); closeModal(); renderAll(); toast('اتحفظ');
+}
+function openDebtPaymentForm(id){
+  const d = state.debts.find(x=>x.id===id);
+  if(!d) return;
+  const remaining = Math.max(0, d.amount-(d.paidAmount||0));
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">تسجيل دفعة: ${esc(d.person)}</div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">${d.direction==='owe'?'هتدفع من محفظتك':'هتقبض في محفظتك'} · متبقي ${fmt(remaining)} ${d.currency}</div>
+    <div class="field"><label>المبلغ</label><input id="debtPayAmount" type="text" inputmode="decimal" value="${remaining}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    <div class="field"><label>المحفظة</label>
+      <div class="chip-select" id="debtPayWalletChips">${state.wallets.map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'debtPayWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+    </div>
+    <div class="field"><label>التاريخ</label><input id="debtPayDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <button class="btn-primary" onclick="saveDebtPayment('${d.id}')">تسجيل الدفعة</button>
+  `);
+}
+function saveDebtPayment(id){
+  const d = state.debts.find(x=>x.id===id);
+  if(!d) return;
+  const amount = parseFloat(document.getElementById('debtPayAmount').value);
+  const wSel = document.getElementById('debtPayWalletChips').querySelector('.sel');
+  const date = document.getElementById('debtPayDate').value;
+  if(!amount||amount<=0){toast('اكتب مبلغ صحيح');return;}
+  if(!wSel){toast('اختار محفظة');return;}
+  if(!date){toast('اختار تاريخ');return;}
+  const txType = d.direction==='owe' ? 'expense' : 'income';
+  state.transactions.push({id:uid(), type:txType, walletId:wSel.dataset.w, categoryId: d.direction==='owe'?'cat_debt_out':'cat_debt_in', amount, note:'سداد دين: '+d.person, date, debtId:d.id});
+  d.paidAmount = (d.paidAmount||0) + amount;
+  if(d.paidAmount >= d.amount - 0.001){ d.settled = true; d.paidAmount = d.amount; }
+  save(); closeModal(); renderAll(); toast('اتسجلت الدفعة');
 }
 function toggleSettleDebt(id){ const d=state.debts.find(x=>x.id===id); d.settled=!d.settled; save(); closeModal(); renderAll(); }
 function deleteDebt(id){ state.debts=state.debts.filter(d=>d.id!==id); save(); closeModal(); renderAll(); toast('اتمسح'); }
@@ -1602,10 +1669,16 @@ function goalsPanelHTML(){
   if(state.goals.length===0){ html+=emptyStateHTML('مفيش أهداف ادخار',''); return html; }
   html += state.goals.map(g=>{
     const pct = Math.min(100,(g.current/g.target)*100);
-    return `<div class="goal-card" onclick="openGoalForm('${g.id}')">
-      <div class="goal-top"><div class="goal-name">🏁 ${esc(g.name)}</div><div style="font-weight:800;">${pct.toFixed(0)}%</div></div>
-      <div class="goal-track"><div class="goal-fill" style="width:${pct}%;"></div></div>
-      <div class="goal-nums"><span>${fmt(g.current)} ${g.currency}</span><span>الهدف: ${fmt(g.target)} ${g.currency}</span></div>
+    return `<div class="goal-card">
+      <div onclick="openGoalForm('${g.id}')">
+        <div class="goal-top"><div class="goal-name">🏁 ${esc(g.name)}</div><div style="font-weight:800;">${pct.toFixed(0)}%</div></div>
+        <div class="goal-track"><div class="goal-fill" style="width:${pct}%;"></div></div>
+        <div class="goal-nums"><span>${fmt(g.current)} ${g.currency}</span><span>الهدف: ${fmt(g.target)} ${g.currency}</span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="btn-secondary" style="margin-top:0;flex:1;" onclick="event.stopPropagation();openGoalMoveForm('${g.id}','contribute')">💰 ساهم</button>
+        <button class="btn-secondary" style="margin-top:0;flex:1;" onclick="event.stopPropagation();openGoalMoveForm('${g.id}','withdraw')">↩️ سحب</button>
+      </div>
     </div>`;
   }).join('');
   return html;
@@ -1619,25 +1692,60 @@ function openGoalForm(id){
     <div class="row2">
       <div class="field"><label>المبلغ المستهدف</label><input id="goalTarget" type="text" inputmode="decimal" value="${ex?ex.target:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
       <div class="field"><label>العملة</label>
-        <select id="goalCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
+        <select id="goalCurrency" ${ex?'disabled':''}>${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
       </div>
     </div>
-    <div class="field"><label>الموفر لحد دلوقتي</label><input id="goalCurrent" type="text" inputmode="decimal" value="${ex?ex.current:'0'}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    ${!ex?`<div class="field"><label>الموفر لحد دلوقتي (اختياري، بدون تسجيل حركة)</label><input id="goalCurrent" type="text" inputmode="decimal" value="0" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    <div style="font-size:11px;color:var(--ink-faint);margin-top:-6px;margin-bottom:14px;">لتسجيل مساهمات فعلية بعد كده استخدم زراري "ساهم" و"سحب" في الكارت، وهيتسجلوا كحركات حقيقية من محافظك.</div>`:''}
     <button class="btn-primary" onclick="saveGoal(${ex?`'${ex.id}'`:'null'})">حفظ</button>
-    ${ex?`<button class="btn-danger-text" onclick="deleteGoal('${ex.id}')">حذف الهدف</button>`:''}
+    ${ex?`<button class="btn-danger-text" onclick="deleteGoal('${ex.id}')">حذف الهدف (من غير حذف الحركات المسجلة)</button>`:''}
   `);
 }
 function saveGoal(id){
   const name = document.getElementById('goalName').value.trim();
   const target = parseFloat(document.getElementById('goalTarget').value);
-  const currency = document.getElementById('goalCurrency').value;
-  const current = parseFloat(document.getElementById('goalCurrent').value)||0;
   if(!name){toast('اكتب اسم الهدف');return;}
   if(!target||target<=0){toast('اكتب مبلغ مستهدف صحيح');return;}
-  const obj = {name,target,currency,current};
-  if(id){ Object.assign(state.goals.find(g=>g.id===id), obj); }
-  else { state.goals.push({id:uid(), ...obj}); }
+  if(id){
+    Object.assign(state.goals.find(g=>g.id===id), {name,target});
+  } else {
+    const currency = document.getElementById('goalCurrency').value;
+    const current = parseFloat(document.getElementById('goalCurrent').value)||0;
+    state.goals.push({id:uid(), name, target, currency, current});
+  }
   save(); closeModal(); renderAll(); toast('اتحفظ الهدف');
+}
+function openGoalMoveForm(id, mode){
+  const g = state.goals.find(x=>x.id===id);
+  if(!g) return;
+  const isContribute = mode==='contribute';
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">${isContribute?'ساهم في':'اسحب من'}: ${esc(g.name)}</div>
+    <div class="field"><label>المبلغ (${g.currency})</label><input id="goalMoveAmount" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    <div class="field"><label>${isContribute?'من محفظة':'إلى محفظة'}</label>
+      <div class="chip-select" id="goalMoveWalletChips">${state.wallets.map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'goalMoveWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+    </div>
+    <button class="btn-primary" onclick="saveGoalMove('${g.id}','${mode}')">${isContribute?'تسجيل المساهمة':'تسجيل السحب'}</button>
+  `);
+}
+function saveGoalMove(id, mode){
+  const g = state.goals.find(x=>x.id===id);
+  if(!g) return;
+  const amount = parseFloat(document.getElementById('goalMoveAmount').value);
+  const wSel = document.getElementById('goalMoveWalletChips').querySelector('.sel');
+  if(!amount||amount<=0){toast('اكتب مبلغ صحيح');return;}
+  if(!wSel){toast('اختار محفظة');return;}
+  const walletId = wSel.dataset.w;
+  const date = new Date().toISOString().slice(0,10);
+  if(mode==='contribute'){
+    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_savings', amount, note:'مساهمة: '+g.name, date, goalId:g.id});
+    g.current = (g.current||0) + amount;
+  } else {
+    state.transactions.push({id:uid(), type:'income', walletId, categoryId:'cat_savings_back', amount, note:'سحب من: '+g.name, date, goalId:g.id});
+    g.current = Math.max(0, (g.current||0) - amount);
+  }
+  save(); closeModal(); renderAll(); toast(mode==='contribute'?'اتسجلت المساهمة':'اتسجل السحب');
 }
 function deleteGoal(id){ state.goals=state.goals.filter(g=>g.id!==id); save(); closeModal(); renderAll(); toast('اتمسح'); }
 
