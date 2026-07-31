@@ -843,14 +843,15 @@ function goldPriceFreshEnoughToSkip(){
 function fetchGoldPrice(showToast){
   if(goldFetchInFlight) return;
   goldFetchInFlight = true;
-  fetch('https://xaus.com/api/v1/spot?unit=gram')
+  const TROY_OUNCE_GRAMS = 31.1034768;
+  fetch('https://api.gold-api.com/price/XAU')
     .then(r=>{
       if(!r.ok) throw new Error('http_'+r.status);
       return r.json();
     })
     .then(data=>{
-      if(data && data.per_gram_usd){
-        state.settings.goldPricePerGramUSD = data.per_gram_usd;
+      if(data && typeof data.price === 'number' && data.price > 0){
+        state.settings.goldPricePerGramUSD = data.price / TROY_OUNCE_GRAMS;
         state.settings.goldPriceLastUpdated = new Date().toISOString();
         state.settings.goldPriceIsManual = false;
         save();
