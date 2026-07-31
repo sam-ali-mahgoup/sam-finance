@@ -84,6 +84,24 @@ body{
   transition:opacity .5s ease, visibility .5s;
 }
 #splash.hide{opacity:0;visibility:hidden;pointer-events:none;}
+
+/* ---------- ONBOARDING ---------- */
+#onboarding{
+  position:fixed;inset:0;z-index:900;background:var(--bg);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px 28px calc(28px + var(--safe-bottom));gap:22px;
+  transition:opacity .35s ease;
+}
+#onboarding.active{display:flex;}
+.ob-content{max-width:380px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px;animation:fadeIn .35s ease;}
+.ob-icon{font-size:56px;}
+.ob-title{font-size:19px;font-weight:800;}
+.ob-desc{font-size:14px;color:var(--ink-dim);line-height:1.8;}
+.ob-dots{display:flex;gap:7px;}
+.ob-dots span{width:7px;height:7px;border-radius:50%;background:var(--bg-elev-2);transition:background .3s,width .3s;}
+.ob-dots span.on{background:var(--brand-2);width:20px;border-radius:5px;}
+.ob-actions{display:flex;gap:10px;width:100%;max-width:380px;}
+.ob-actions button{flex:1;}
 .splash-mark{width:74px;height:74px;border-radius:22px;background:linear-gradient(150deg,var(--brand-2),var(--brand));display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:34px;box-shadow:0 10px 30px rgba(31,138,112,.5), inset 0 1px 0 rgba(255,255,255,.3);animation:splashPop .6s cubic-bezier(.34,1.56,.64,1);}
 .splash-title{color:#fff;font-weight:800;font-size:17px;letter-spacing:.3px;opacity:.9;}
 @keyframes splashPop{from{transform:scale(.4);opacity:0;}to{transform:scale(1);opacity:1;}}
@@ -294,6 +312,9 @@ button{cursor:pointer;border:none;background:none;}
   transition:transform .3s cubic-bezier(.34,1.56,.64,1);
 }
 .wallet-card:active{transform:scale(.98);}
+.wallet-card.dragging-wallet{transform:scale(1.03);box-shadow:0 14px 30px rgba(0,0,0,.35);opacity:.95;}
+.wallet-drag-handle{font-size:16px;color:var(--ink-faint);padding:6px;flex-shrink:0;touch-action:none;cursor:grab;}
+.shared-badge{display:inline-block;font-size:10px;font-weight:700;background:color-mix(in srgb, var(--gold) 20%, transparent);color:var(--gold);padding:2px 7px;border-radius:7px;margin-right:6px;vertical-align:middle;}
 .wallet-card .wc-icon-lg{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;}
 .wallet-card .wc-info{flex:1;min-width:0;}
 .wallet-card .wc-name-lg{font-weight:800;font-size:15px;}
@@ -426,6 +447,14 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
   <div class="splash-mark">S</div>
   <div class="splash-title">SAM Finance</div>
 </div>
+<div id="onboarding">
+  <div class="ob-content" id="obContent"></div>
+  <div class="ob-dots" id="obDots"></div>
+  <div class="ob-actions">
+    <button class="btn-secondary" style="margin-top:0;" onclick="closeOnboarding()">تخطي</button>
+    <button class="btn-primary" style="margin-top:0;" id="obNextBtn" onclick="obNext()">التالي</button>
+  </div>
+</div>
 <div class="bg-blob b1"></div>
 <div class="bg-blob b2"></div>
 <div class="bg-blob b3"></div>
@@ -497,6 +526,8 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
   <div class="view" id="view-reports">
     <div class="section-title" style="margin-top:6px;">التقارير</div>
     <div class="filter-tabs" id="reportPeriodTabs"></div>
+    <div id="forecastCard"></div>
+    <div id="anomalyCard"></div>
     <div class="stat-grid">
       <div class="stat-box"><div class="sv" id="repIncome" style="color:var(--brand-2);">0</div><div class="sl">إجمالي الدخل</div></div>
       <div class="stat-box"><div class="sv" id="repExpense" style="color:var(--red);">0</div><div class="sl">إجمالي الصرف</div></div>
@@ -527,6 +558,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
         <div class="m-item" onclick="openPanel('categories')"><div class="m-icon">🏷️</div><div class="m-text"><div class="m-title">التصنيفات</div><div class="m-sub">عدّل أو ضيف تصنيفات، وتصنيفات فرعية</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('templates')"><div class="m-icon">⚡</div><div class="m-text"><div class="m-title">القوالب السريعة</div><div class="m-sub">حركات جاهزة تسجلها بضغطة واحدة</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('calc503020')"><div class="m-icon">🧮</div><div class="m-text"><div class="m-title">حاسبة 50/30/20</div><div class="m-sub">خطط ميزانيتك من دخلك الشهري</div></div><div class="m-arrow">‹</div></div>
+        <div class="m-item" onclick="openPanel('annual')"><div class="m-icon">📅</div><div class="m-text"><div class="m-title">التقرير السنوي</div><div class="m-sub">ملخص كل سنة، أحسن وأضعف شهر</div></div><div class="m-arrow">‹</div></div>
       </div>
       <div class="section-title">الإعدادات</div>
       <div class="card menu-list">
@@ -646,6 +678,11 @@ function load(){
     state.settings.ratesLastUpdated = null; // forces an immediate correct re-fetch on next init
   }
   state.debts.forEach(d=>{ if(d.paidAmount===undefined) d.paidAmount = 0; if(d.walletId===undefined) d.walletId = null; });
+  if(state.settings.faceIdEnabled===undefined) state.settings.faceIdEnabled = false;
+  if(state.settings.faceIdCredentialId===undefined) state.settings.faceIdCredentialId = null;
+  if(state.settings.onboardingSeen===undefined) state.settings.onboardingSeen = false;
+  if(state.settings.showHijri===undefined) state.settings.showHijri = false;
+  state.wallets.forEach(w=>{ if(w.sharedWith===undefined) w.sharedWith = null; if(w.order===undefined) w.order = 0; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
 }
@@ -930,7 +967,7 @@ function renderDashboard(){
 
   // wallets scroll
   const ws = document.getElementById('dashWallets');
-  ws.innerHTML = state.wallets.map(w=>`
+  ws.innerHTML = [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)).map(w=>`
     <div class="wallet-chip" onclick="switchView('wallets')">
       <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div></div>
       <div class="wc-name">${esc(w.name)}</div>
@@ -1032,7 +1069,17 @@ function txRowHTML(t){
 function fmtDate(d){
   const dt = new Date(d+'T00:00:00');
   const months=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-  return dt.getDate()+' '+months[dt.getMonth()];
+  let out = dt.getDate()+' '+months[dt.getMonth()];
+  if(state.settings && state.settings.showHijri){
+    const hijri = fmtHijri(dt);
+    if(hijri) out += ' (' + hijri + ')';
+  }
+  return out;
+}
+function fmtHijri(dt){
+  try{
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {day:'numeric', month:'long'}).format(dt);
+  }catch(e){ return ''; }
 }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -1051,21 +1098,80 @@ function evalCalcField(input){
 /* =========================================================================
    RENDER: WALLETS
    ========================================================================= */
+let walletDragState = null, walletDragBound = false;
+function initWalletDrag(){
+  const list = document.getElementById('walletsList');
+  if(!list || walletDragBound) return;
+  walletDragBound = true;
+  list.addEventListener('touchstart', e=>{
+    const handle = e.target.closest('.wallet-drag-handle');
+    if(!handle) return;
+    const card = handle.closest('.wallet-card');
+    if(!card) return;
+    walletDragState = { id: card.dataset.wid, startY: e.touches[0].clientY, card };
+    card.style.zIndex = 20;
+    card.classList.add('dragging-wallet');
+  }, {passive:true});
+  list.addEventListener('touchmove', e=>{
+    if(!walletDragState) return;
+    const dy = e.touches[0].clientY - walletDragState.startY;
+    walletDragState.card.style.transform = `translateY(${dy}px) scale(1.03)`;
+    const midY = walletDragState.card.getBoundingClientRect().top + walletDragState.card.getBoundingClientRect().height/2;
+    const cards = Array.from(list.querySelectorAll('.wallet-card'));
+    for(const c of cards){
+      if(c===walletDragState.card) continue;
+      const r = c.getBoundingClientRect();
+      if(midY > r.top && midY < r.bottom){
+        const fromIdx = state.wallets.findIndex(w=>w.id===walletDragState.id);
+        const toIdx = state.wallets.findIndex(w=>w.id===c.dataset.wid);
+        if(fromIdx>-1 && toIdx>-1 && fromIdx!==toIdx){
+          const [moved] = state.wallets.splice(fromIdx,1);
+          state.wallets.splice(toIdx,0,moved);
+          const keepId = walletDragState.id;
+          renderWallets();
+          const newCard = list.querySelector(`.wallet-card[data-wid="${keepId}"]`);
+          if(newCard){
+            newCard.style.zIndex = 20;
+            newCard.classList.add('dragging-wallet');
+            walletDragState.card = newCard;
+            walletDragState.startY = e.touches[0].clientY;
+          }
+        }
+        break;
+      }
+    }
+  }, {passive:true});
+  list.addEventListener('touchend', ()=>{
+    if(!walletDragState) return;
+    walletDragState.card.style.transform = '';
+    walletDragState.card.style.zIndex = '';
+    walletDragState.card.classList.remove('dragging-wallet');
+    state.wallets.forEach((w,i)=>{ w.order = i; });
+    save();
+    walletDragState = null;
+    renderWallets();
+  }, {passive:true});
+}
 function renderWallets(){
   const wrap = document.getElementById('walletsList');
   if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك'); return; }
-  wrap.innerHTML = state.wallets.map(w=>`
-    <div class="wallet-card" onclick="openWalletForm('${w.id}')">
-      <div class="wc-icon-lg" style="background:${w.color}22;color:${w.color};">${w.icon}</div>
-      <div class="wc-info">
-        <div class="wc-name-lg">${esc(w.name)}</div>
-        <div class="wc-cur">${w.currency}</div>
-      </div>
-      <div>
-        <div class="wc-bal-lg money">${fmt(walletBalance(w.id))}</div>
-        <div class="wc-bal-base money">≈ ${fmt(toBase(walletBalance(w.id),w.currency))} ${state.settings.baseCurrency}</div>
+  const sorted = [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0));
+  wrap.innerHTML = sorted.map(w=>`
+    <div class="wallet-card" data-wid="${w.id}">
+      <div class="wallet-drag-handle">☰</div>
+      <div onclick="openWalletForm('${w.id}')" style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;">
+        <div class="wc-icon-lg" style="background:${w.color}22;color:${w.color};">${w.icon}</div>
+        <div class="wc-info">
+          <div class="wc-name-lg">${esc(w.name)}${w.sharedWith?`<span class="shared-badge">🤝 ${esc(w.sharedWith)}</span>`:''}</div>
+          <div class="wc-cur">${w.currency}</div>
+        </div>
+        <div>
+          <div class="wc-bal-lg money">${fmt(walletBalance(w.id))}</div>
+          <div class="wc-bal-base money">≈ ${fmt(toBase(walletBalance(w.id),w.currency))} ${state.settings.baseCurrency}</div>
+        </div>
       </div>
     </div>`).join('');
+  initWalletDrag();
 }
 
 /* =========================================================================
@@ -1248,8 +1354,81 @@ function periodRange(){
   else { start=new Date(now.getFullYear(),0,1); }
   return { start: start.toISOString().slice(0,10), end: now.toISOString().slice(0,10) };
 }
+/* ---- End-of-month forecast ---- */
+function renderForecast(){
+  const host = document.getElementById('forecastCard');
+  if(!host) return;
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const {start,end} = currentMonthRange();
+  let spentSoFar = 0, incomeSoFar = 0;
+  state.transactions.forEach(t=>{
+    if(t.date<start||t.date>end) return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    if(t.type==='expense') spentSoFar += toBase(t.amount,cur);
+    if(t.type==='income') incomeSoFar += toBase(t.amount,cur);
+  });
+  if(spentSoFar<=0){ host.innerHTML=''; return; }
+  const dailyAvg = spentSoFar/Math.max(1,dayOfMonth);
+  const projectedSpend = dailyAvg*daysInMonth;
+  const projectedNet = incomeSoFar - projectedSpend;
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">🔮 توقع نهاية الشهر</div>
+    <div style="font-size:12.5px;color:var(--ink-dim);line-height:1.8;">
+      بمعدل صرفك الحالي (${fmt(dailyAvg)} ${state.settings.baseCurrency}/يوم)، متوقع تصرف حوالي <b style="color:var(--red);">${fmt(projectedSpend)}</b> ${state.settings.baseCurrency} بنهاية الشهر.<br>
+      ${projectedNet>=0?`متوقع يفضل معاك <b style="color:var(--brand-2);">${fmt(projectedNet)}</b> ${state.settings.baseCurrency}.`:`<b style="color:var(--red);">ممكن تتخطى دخل الشهر بـ ${fmt(Math.abs(projectedNet))} ${state.settings.baseCurrency}.</b>`}
+    </div>
+  </div>`;
+}
+
+/* ---- Unusual spending detection ---- */
+function renderAnomalies(){
+  const host = document.getElementById('anomalyCard');
+  if(!host) return;
+  const now = new Date();
+  const {start,end} = currentMonthRange();
+  const currentByCat = {};
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense'||t.date<start||t.date>end) return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    currentByCat[t.categoryId] = (currentByCat[t.categoryId]||0) + toBase(t.amount,cur);
+  });
+  const prevSumByCat = {}, prevCountByCat = {};
+  for(let i=1;i<=3;i++){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const s = new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);
+    const e = new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+    state.transactions.forEach(t=>{
+      if(t.type!=='expense'||t.date<s||t.date>e) return;
+      const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+      prevSumByCat[t.categoryId] = (prevSumByCat[t.categoryId]||0) + toBase(t.amount,cur);
+    });
+    prevCountByCat[i]=1;
+  }
+  const anomalies = [];
+  Object.keys(currentByCat).forEach(catId=>{
+    const cur = currentByCat[catId];
+    const avg = (prevSumByCat[catId]||0)/3;
+    if(avg>0 && cur > avg*1.5 && (cur-avg) > 30){
+      anomalies.push({catId, cur, avg, pct:((cur-avg)/avg*100)});
+    }
+  });
+  if(anomalies.length===0){ host.innerHTML=''; return; }
+  anomalies.sort((a,b)=>b.pct-a.pct);
+  host.innerHTML = `<div class="card" style="margin-top:10px;border-color:var(--gold);">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">⚡ مصاريف غير عادية الشهر ده</div>
+    ${anomalies.slice(0,4).map(a=>{
+      const c = catById(a.catId);
+      return `<div style="font-size:12px;color:var(--ink-dim);margin-bottom:6px;">${c?c.icon+' '+esc(c.name):'—'}: صرفت <b>${fmt(a.cur)}</b> مقابل متوسط <b>${fmt(a.avg)}</b> (+${a.pct.toFixed(0)}%)</div>`;
+    }).join('')}
+  </div>`;
+}
+
 function renderReports(){
   renderReportTabs();
+  renderForecast();
+  renderAnomalies();
   const {start,end} = periodRange();
   let inc=0,exp=0;
   const byCat = {};
@@ -1396,7 +1575,7 @@ function openPanel(name){
   currentPanel = name;
   document.getElementById('morePanel-menu').style.display='none';
   document.getElementById('morePanel-sub').style.display='block';
-  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20'};
+  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20',annual:'التقرير السنوي'};
   document.getElementById('panelTitle').textContent = titles[name]||'';
   renderPanel();
 }
@@ -1418,6 +1597,7 @@ function renderPanel(){
   else if(currentPanel==='about') body.innerHTML = aboutPanelHTML();
   else if(currentPanel==='templates') body.innerHTML = templatesPanelHTML();
   else if(currentPanel==='calc503020') body.innerHTML = calc503020PanelHTML();
+  else if(currentPanel==='annual') body.innerHTML = annualReportPanelHTML();
 }
 
 /* ---- Budgets ---- */
@@ -1876,6 +2056,7 @@ function fmtDateTime(iso){
 
 /* ---- Security ---- */
 function securityPanelHTML(){
+  const faceIdSupported = !!window.PublicKeyCredential;
   return `
     <div class="card menu-list">
       <div class="m-item" onclick="${state.settings.pin?'removePin()':'setupPin()'}">
@@ -1884,14 +2065,67 @@ function securityPanelHTML(){
       </div>
       ${state.settings.pin?`<div class="m-item" onclick="setupPin()"><div class="m-icon">✏️</div><div class="m-text"><div class="m-title">تغيير الرمز السري</div></div></div>`:''}
       ${state.settings.pin?`<div class="m-item" onclick="toggleAutoLock()"><div class="m-icon">📴</div><div class="m-text"><div class="m-title">قفل تلقائي لما تسيب التطبيق</div><div class="m-sub">${state.settings.autoLockOnBackground?'شغال':'متوقف'}</div></div></div>`:''}
+      ${state.settings.pin && faceIdSupported?`<div class="m-item" onclick="${state.settings.faceIdEnabled?'disableFaceId()':'setupFaceId()'}"><div class="m-icon">🆔</div><div class="m-text"><div class="m-title">Face ID / Touch ID</div><div class="m-sub">${state.settings.faceIdEnabled?'شغال - هيتطلب قبل الـ PIN':'افتح التطبيق ببصمتك أو وشك بدل الرمز'}</div></div></div>`:''}
     </div>
     <div class="card menu-list" style="margin-top:10px;">
       <div class="m-item" onclick="togglePrivacyMode()">
         <div class="m-icon">🙈</div>
         <div class="m-text"><div class="m-title">وضع الخصوصية</div><div class="m-sub">إخفاء كل المبالغ بلمسة واحدة</div></div>
       </div>
+      <div class="m-item" onclick="toggleHijri()">
+        <div class="m-icon">🌙</div>
+        <div class="m-text"><div class="m-title">إظهار التاريخ الهجري</div><div class="m-sub">${state.settings.showHijri?'شغال جنب التاريخ الميلادي':'متوقف'}</div></div>
+      </div>
     </div>
   `;
+}
+function toggleHijri(){ state.settings.showHijri=!state.settings.showHijri; save(); openPanel('security'); renderAll(); }
+async function setupFaceId(){
+  if(!window.PublicKeyCredential){ toast('الجهاز/المتصفح ده مش بيدعم Face ID أو Touch ID'); return; }
+  try{
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if(!available){ toast('مفيش Face ID أو Touch ID متاح على الجهاز ده'); return; }
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const cred = await navigator.credentials.create({
+      publicKey:{
+        challenge,
+        rp:{ name:'SAM Finance' },
+        user:{ id:userId, name:'sam', displayName:'SAM' },
+        pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+        authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required' },
+        timeout:60000,
+      }
+    });
+    const rawIdArr = new Uint8Array(cred.rawId);
+    let binary=''; rawIdArr.forEach(b=>binary+=String.fromCharCode(b));
+    state.settings.faceIdCredentialId = btoa(binary);
+    state.settings.faceIdEnabled = true;
+    save(); openPanel('security'); toast('اتفعل Face ID / Touch ID ✓');
+  }catch(e){
+    toast('لغيت التفعيل أو حصل خطأ');
+  }
+}
+function disableFaceId(){
+  state.settings.faceIdEnabled=false; state.settings.faceIdCredentialId=null; save(); openPanel('security'); toast('اتلغى');
+}
+async function tryFaceIdUnlock(){
+  if(!state.settings.faceIdEnabled || !state.settings.faceIdCredentialId) return false;
+  try{
+    const binary = atob(state.settings.faceIdCredentialId);
+    const idBytes = new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) idBytes[i]=binary.charCodeAt(i);
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    await navigator.credentials.get({
+      publicKey:{
+        challenge,
+        allowCredentials:[{type:'public-key', id:idBytes}],
+        userVerification:'required',
+        timeout:30000,
+      }
+    });
+    return true;
+  }catch(e){ return false; }
 }
 function toggleAutoLock(){ state.settings.autoLockOnBackground=!state.settings.autoLockOnBackground; save(); openPanel('security'); }
 function togglePrivacyMode(){
@@ -1947,6 +2181,21 @@ function setupAutoLock(){
 }
 function checkAppLock(){
   if(!state.settings.pin) return;
+  document.getElementById('pinlock').classList.add('active');
+  if(state.settings.faceIdEnabled){
+    document.getElementById('pinTitle').textContent = 'جاري التحقق بـ Face ID / Touch ID...';
+    document.getElementById('pinError').textContent = '';
+    document.getElementById('pinDots').innerHTML = '';
+    document.getElementById('pinPad').innerHTML = '';
+    tryFaceIdUnlock().then(ok=>{
+      if(ok){ document.getElementById('pinlock').classList.remove('active'); }
+      else { startPinEntry(); }
+    });
+  } else {
+    startPinEntry();
+  }
+}
+function startPinEntry(){
   let entered='';
   document.getElementById('pinTitle').textContent='اكتب الرمز السري لفتح التطبيق';
   document.getElementById('pinError').textContent='';
@@ -2126,6 +2375,47 @@ function render503020(){
     </div>`;
 }
 
+/* ---- Annual Report ---- */
+let annualSelectedYear = null;
+function annualReportPanelHTML(){
+  const years = [...new Set(state.transactions.map(t=>t.date.slice(0,4)))].sort((a,b)=>b-a);
+  if(years.length===0) return emptyStateHTML('مفيش بيانات كفاية','سجل حركات الأول عشان نقدر نعرض تقرير سنوي');
+  if(!annualSelectedYear || !years.includes(annualSelectedYear)) annualSelectedYear = years[0];
+  const year = annualSelectedYear;
+  let totalInc=0, totalExp=0;
+  const monthlyData = Array.from({length:12},()=>({inc:0,exp:0}));
+  const catTotals = {};
+  state.transactions.forEach(t=>{
+    if(!t.date.startsWith(year)) return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    const m = parseInt(t.date.slice(5,7),10)-1;
+    if(t.type==='income'){ const v=toBase(t.amount,cur); totalInc+=v; monthlyData[m].inc+=v; }
+    if(t.type==='expense'){ const v=toBase(t.amount,cur); totalExp+=v; monthlyData[m].exp+=v; catTotals[t.categoryId]=(catTotals[t.categoryId]||0)+v; }
+  });
+  let bestMonth=0, worstMonth=0;
+  monthlyData.forEach((m,i)=>{
+    if((m.inc-m.exp) > (monthlyData[bestMonth].inc-monthlyData[bestMonth].exp)) bestMonth=i;
+    if((m.inc-m.exp) < (monthlyData[worstMonth].inc-monthlyData[worstMonth].exp)) worstMonth=i;
+  });
+  const topCatEntry = Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
+  const topCat = topCatEntry ? catById(topCatEntry[0]) : null;
+  const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  return `
+    <div class="chip-select" style="margin-bottom:14px;">${years.map(y=>`<button type="button" class="${y===year?'sel':''}" onclick="annualSelectedYear='${y}';renderPanel();">${y}</button>`).join('')}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(totalInc)}</div><div class="sl">إجمالي الدخل</div></div>
+      <div class="stat-box"><div class="sv" style="color:var(--red);">${fmt(totalExp)}</div><div class="sl">إجمالي الصرف</div></div>
+      <div class="stat-box"><div class="sv">${fmt(totalInc-totalExp)}</div><div class="sl">صافي الادخار</div></div>
+      <div class="stat-box"><div class="sv" style="font-size:13.5px;">${topCat?topCat.icon+' '+esc(topCat.name):'—'}</div><div class="sl">أكتر تصنيف صرف</div></div>
+    </div>
+    <div class="section-title">أحسن وأضعف شهر</div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);"><span>🟢 أحسن شهر (صافي)</span><b>${monthNames[bestMonth]}</b></div>
+      <div style="display:flex;justify-content:space-between;padding:7px 0;"><span>🔴 أضعف شهر (صافي)</span><b>${monthNames[worstMonth]}</b></div>
+    </div>
+  `;
+}
+
 /* =========================================================================
    MODAL helpers
    ========================================================================= */
@@ -2186,6 +2476,8 @@ function openWalletForm(id){
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="wIconGrid">${WALLET_ICONS.map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':''}" data-i="${ic}" onclick="selectIcon2(this,'wIconGrid')">${ic}</button>`).join('')}</div></div>
     <div class="field"><label>اللون</label><div class="color-grid" id="wColorGrid">${COLORS.map(c=>`<button type="button" class="${ex&&ex.color===c?'sel':''}" data-c="${c}" style="background:${c};" onclick="selectColor(this)"></button>`).join('')}</div></div>
     <div class="field"><label>تنبيه لو الرصيد أقل من (اختياري)</label><input id="wLowAlert" type="text" inputmode="decimal" value="${ex&&ex.lowBalanceAlert!=null?ex.lowBalanceAlert:''}" placeholder="اسيبها فاضية لو مش عايز تنبيه" onblur="evalCalcField(this)"></div>
+    <div class="field"><label>محفظة مشتركة مع؟ (اختياري)</label><input id="wSharedWith" value="${ex&&ex.sharedWith?esc(ex.sharedWith):''}" placeholder="اسم الشخص"></div>
+    <div style="font-size:11px;color:var(--ink-faint);margin-top:-6px;margin-bottom:14px;">ده تنظيمي بس (اسم يفكرك إن المحفظة دي مشتركة) — مفيش مزامنة حقيقية بين جهازين، البيانات لسه محلية على جهازك.</div>
     ${!ex?`<div class="field"><label>الرصيد الافتتاحي (اختياري)</label><input id="wOpening" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)"></div>`:''}
     <button class="btn-primary" onclick="saveWallet(${ex?`'${ex.id}'`:'null'})">حفظ</button>
     ${ex?`<button class="btn-danger-text" onclick="deleteWallet('${ex.id}')">حذف المحفظة</button>`:''}
@@ -2203,10 +2495,12 @@ function saveWallet(id){
   const color = colorBtn?colorBtn.dataset.c:COLORS[0];
   const lowAlertRaw = document.getElementById('wLowAlert').value;
   const lowBalanceAlert = lowAlertRaw!=='' ? (parseFloat(lowAlertRaw)||null) : null;
+  const sharedWithRaw = document.getElementById('wSharedWith').value.trim();
+  const sharedWith = sharedWithRaw || null;
   if(id){
-    Object.assign(walletById(id), {name,currency,icon,color,lowBalanceAlert});
+    Object.assign(walletById(id), {name,currency,icon,color,lowBalanceAlert,sharedWith});
   } else {
-    const w = {id:uid(),name,currency,icon,color,order:state.wallets.length,lowBalanceAlert};
+    const w = {id:uid(),name,currency,icon,color,order:state.wallets.length,lowBalanceAlert,sharedWith};
     state.wallets.push(w);
     const opening = parseFloat(document.getElementById('wOpening')?.value);
     if(opening){
@@ -2393,8 +2687,43 @@ function init(){
   setTimeout(()=>{
     const s = document.getElementById('splash');
     if(s){ s.classList.add('hide'); setTimeout(()=>s.remove(),550); }
+    if(!state.settings.onboardingSeen && !document.getElementById('pinlock').classList.contains('active')){
+      showOnboarding();
+    }
   }, 600);
 }
+const OB_SLIDES = [
+  {icon:'👛', title:'كل محافظك في مكان واحد', desc:'كاش، فودافون كاش، حسابات بنكية... ضيف أي عدد من المحافظ وتابع رصيد كل واحدة لحالها وكلهم مع بعض.'},
+  {icon:'🔁', title:'دخل، صرف، وتحويل', desc:'سجل أي حركة بضغطة واحدة من زرار الـ + تحت. التحويل بين محفظتين بعملات مختلفة بيتحسب تلقائي.'},
+  {icon:'🎯', title:'ميزانية وأهداف وديون', desc:'حدد ميزانية شهرية لكل تصنيف، وفّر لهدف معين، وتابع اللي ليك واللي عليك — كل حاجة مربوطة بمحافظك الفعلية.'},
+  {icon:'🔒', title:'بياناتك ملكك بس', desc:'كل حاجة متخزنة على جهازك بس، من غير سيرفر بيشوفها. فعّل قفل الرمز السري أو Face ID من الإعدادات لحماية إضافية.'},
+];
+let obIndex = 0;
+function showOnboarding(){
+  obIndex = 0;
+  renderOnboardingSlide();
+  document.getElementById('onboarding').classList.add('active');
+}
+function renderOnboardingSlide(){
+  const s = OB_SLIDES[obIndex];
+  document.getElementById('obContent').innerHTML = `
+    <div class="ob-icon">${s.icon}</div>
+    <div class="ob-title">${s.title}</div>
+    <div class="ob-desc">${s.desc}</div>
+  `;
+  document.getElementById('obDots').innerHTML = OB_SLIDES.map((_,i)=>`<span class="${i===obIndex?'on':''}"></span>`).join('');
+  document.getElementById('obNextBtn').textContent = obIndex===OB_SLIDES.length-1 ? 'يلا نبدأ' : 'التالي';
+}
+function obNext(){
+  if(obIndex < OB_SLIDES.length-1){ obIndex++; renderOnboardingSlide(); }
+  else { closeOnboarding(); }
+}
+function closeOnboarding(){
+  state.settings.onboardingSeen = true;
+  save();
+  document.getElementById('onboarding').classList.remove('active');
+}
+
 init();
 </script>
 </body>
