@@ -1842,10 +1842,10 @@ function currenciesPanelHTML(){
     <div class="section-title">أسعار الصرف ${auto?'':'<span class="link" onclick="openAddCurrencyForm()">+ عملة جديدة</span>'}</div>
     <div class="card">
       ${Object.keys(rates).map(c=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border);">
-          <div style="font-weight:800;width:52px;">${c}</div>
+        <div style="display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--border);">
+          <div style="font-weight:800;width:70px;font-size:13px;">1 ${c} =</div>
           <input type="number" value="${rates[c]}" style="flex:1;" ${(c===state.settings.baseCurrency||auto)?'disabled':''} onchange="updateRate('${c}',this.value)">
-          <div style="font-size:11px;color:var(--ink-faint);">لكل 1 ${state.settings.baseCurrency}</div>
+          <div style="font-size:12px;color:var(--ink-faint);width:38px;">${state.settings.baseCurrency}</div>
         </div>`).join('')}
     </div>
     ${auto?`<div style="font-size:11.5px;color:var(--ink-faint);margin-top:10px;padding:0 4px;">الأسعار بتتحدث تلقائيًا من الإنترنت. لو عايز تعدلها بنفسك، اقفل التحديث التلقائي من فوق.</div>`
