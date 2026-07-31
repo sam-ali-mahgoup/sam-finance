@@ -2301,7 +2301,7 @@ function openAssetForm(id){
 }
 function assetKindFieldsHTML(kind, ex){
   if(kind==='gold'){
-    if(!state.settings.goldPriceLastUpdated) fetchGoldPrice(false);
+    if(!state.settings.goldPriceLastUpdated) fetchGoldPrice(true);
     const karats = [24,22,21,18,14,9];
     return `
       <div class="row2">
@@ -3137,6 +3137,7 @@ function renderAll(){
   renderWallets();
   renderTransactions();
   renderReports();
+  if(currentPanel && document.getElementById('view-more').classList.contains('active')) renderPanel();
 }
 
 if('serviceWorker' in navigator){
