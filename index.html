@@ -2051,7 +2051,7 @@ function renderPanel(){
   else if(currentPanel==='templates') body.innerHTML = templatesPanelHTML();
   else if(currentPanel==='calc503020') body.innerHTML = calc503020PanelHTML();
   else if(currentPanel==='annual') body.innerHTML = annualReportPanelHTML();
-  else if(currentPanel==='splitbill') body.innerHTML = splitBillPanelHTML();
+  else if(currentPanel==='splitbill'){ body.innerHTML = splitBillPanelHTML(); if(splitBillState.mode==='itemized') renderSplitItemsResult(); }
   else if(currentPanel==='badges') body.innerHTML = badgesPanelHTML();
   else if(currentPanel==='whatif') body.innerHTML = whatIfPanelHTML();
 }
@@ -3011,7 +3011,17 @@ function annualReportPanelHTML(){
 }
 
 /* ---- Bill Split Calculator ---- */
+let splitBillState = { mode:'equal', people:['أنا','صاحبي'], items:[], tipPct:0 };
 function splitBillPanelHTML(){
+  return `
+    <div class="type-toggle" id="splitMode">
+      <button type="button" class="${splitBillState.mode==='equal'?'active':''}" data-t="equal" onclick="splitBillState.mode='equal';renderPanel();">بالتساوي</button>
+      <button type="button" class="${splitBillState.mode==='itemized'?'active':''}" data-t="itemized" onclick="splitBillState.mode='itemized';renderPanel();">كل واحد حسب طلبه</button>
+    </div>
+    ${splitBillState.mode==='equal' ? splitBillEqualHTML() : splitBillItemizedHTML()}
+  `;
+}
+function splitBillEqualHTML(){
   return `
     <div class="card">
       <div class="field"><label>إجمالي الفاتورة</label><input id="splitAmount" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)" oninput="renderSplitResult()"></div>
@@ -3022,6 +3032,78 @@ function splitBillPanelHTML(){
     </div>
     <div id="splitResult" style="margin-top:14px;"></div>
   `;
+}
+function splitBillItemizedHTML(){
+  return `
+    <div class="card">
+      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">مين موجود؟</div>
+      ${splitBillState.people.map((p,i)=>`
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+          <input value="${esc(p)}" oninput="splitBillState.people[${i}]=this.value" onblur="renderPanel()" style="flex:1;">
+          ${splitBillState.people.length>1?`<button class="icon-btn" style="width:36px;height:36px;flex-shrink:0;" onclick="removeSplitPerson(${i})">✕</button>`:''}
+        </div>`).join('')}
+      <button class="btn-secondary" style="margin-top:2px;" onclick="addSplitPerson()">+ ضيف شخص</button>
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">مين طلب إيه؟</div>
+      ${splitBillState.items.length===0?`<div style="font-size:12px;color:var(--ink-faint);margin-bottom:10px;">ضيف كل صنف واختار مين هيشاركوا فيه (ممكن أكتر من شخص للصنف الواحد)</div>`:''}
+      ${splitBillState.items.map((it,i)=>splitItemRowHTML(it,i)).join('')}
+      <button class="btn-secondary" style="margin-top:8px;" onclick="addSplitItem()">+ ضيف صنف</button>
+    </div>
+    <div class="card" style="margin-top:10px;">
+      <div class="field" style="margin-bottom:0;"><label>نسبة خدمة/تيب على الكل (اختياري %)</label><input type="number" min="0" value="${splitBillState.tipPct}" oninput="splitBillState.tipPct=parseFloat(this.value)||0;renderSplitItemsResult();"></div>
+    </div>
+    <div id="splitItemsResult" style="margin-top:14px;"></div>
+  `;
+}
+function splitItemRowHTML(it,i){
+  return `<div style="border-bottom:1px solid var(--border);padding:10px 0;">
+    <div class="row2" style="margin-bottom:8px;align-items:center;">
+      <input value="${esc(it.name)}" placeholder="اسم الصنف" oninput="splitBillState.items[${i}].name=this.value" style="flex:1;">
+      <input type="text" inputmode="decimal" value="${it.price||''}" placeholder="السعر" style="width:90px;" onblur="evalCalcField(this)" oninput="splitBillState.items[${i}].price=parseFloat(this.value)||0;renderSplitItemsResult();">
+      <button class="icon-btn" style="width:36px;height:36px;flex-shrink:0;" onclick="removeSplitItem(${i})">✕</button>
+    </div>
+    <div class="chip-select">
+      ${splitBillState.people.map((p,pi)=>`<button type="button" class="${it.people.includes(pi)?'sel':''}" onclick="toggleSplitItemPerson(${i},${pi})">${esc(p)||'؟'}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function addSplitPerson(){ splitBillState.people.push('شخص '+(splitBillState.people.length+1)); renderPanel(); }
+function removeSplitPerson(i){
+  splitBillState.people.splice(i,1);
+  splitBillState.items.forEach(it=>{ it.people = it.people.filter(pi=>pi!==i).map(pi=>pi>i?pi-1:pi); });
+  renderPanel();
+}
+function addSplitItem(){ splitBillState.items.push({name:'', price:0, people: splitBillState.people.map((_,i)=>i)}); renderPanel(); }
+function removeSplitItem(i){ splitBillState.items.splice(i,1); renderPanel(); }
+function toggleSplitItemPerson(itemIdx, personIdx){
+  const it = splitBillState.items[itemIdx];
+  const pos = it.people.indexOf(personIdx);
+  if(pos>-1) it.people.splice(pos,1); else it.people.push(personIdx);
+  renderPanel();
+}
+function renderSplitItemsResult(){
+  const wrap = document.getElementById('splitItemsResult');
+  if(!wrap) return;
+  const totals = splitBillState.people.map(()=>0);
+  let grandTotal = 0;
+  splitBillState.items.forEach(it=>{
+    if(!it.price || it.people.length===0) return;
+    const share = it.price / it.people.length;
+    it.people.forEach(pi=>{ if(totals[pi]!==undefined) totals[pi]+=share; });
+    grandTotal += it.price;
+  });
+  if(grandTotal<=0){ wrap.innerHTML=''; return; }
+  const withTip = grandTotal * (1+splitBillState.tipPct/100);
+  wrap.innerHTML = `
+    <div class="card">
+      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">الإجمالي: <span class="money">${fmt(withTip)} ${state.settings.baseCurrency}</span></div>
+      ${splitBillState.people.map((p,i)=>{
+        const personTotal = totals[i] * (1+splitBillState.tipPct/100);
+        return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>${esc(p)||'؟'}</span><b class="money">${fmt(personTotal)}</b></div>`;
+      }).join('')}
+      ${splitBillState.items.some(it=>it.price>0 && it.people.length===0)?`<div style="font-size:11.5px;color:var(--red);margin-top:8px;">⚠️ في صنف مش متحدد مين هيدفع فيه</div>`:''}
+    </div>`;
 }
 function renderSplitResult(){
   const amount = parseFloat(document.getElementById('splitAmount')?.value)||0;
