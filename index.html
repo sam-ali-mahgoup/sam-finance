@@ -739,6 +739,7 @@ function load(){
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
   if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
   if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
+  if(state.settings.goldPriceIsManual===undefined) state.settings.goldPriceIsManual = false;
   state.assets.forEach(a=>{ if(a.isGold===undefined) a.isGold=false; if(a.gramWeight===undefined) a.gramWeight=null; if(a.karat===undefined) a.karat=null; });
   state.wallets.forEach(w=>{ if(w.sharedWith===undefined) w.sharedWith = null; if(w.order===undefined) w.order = 0; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
@@ -843,24 +844,43 @@ function fetchGoldPrice(showToast){
   if(goldFetchInFlight) return;
   goldFetchInFlight = true;
   fetch('https://xaus.com/api/v1/spot?unit=gram')
-    .then(r=>r.json())
+    .then(r=>{
+      if(!r.ok) throw new Error('http_'+r.status);
+      return r.json();
+    })
     .then(data=>{
       if(data && data.per_gram_usd){
         state.settings.goldPricePerGramUSD = data.per_gram_usd;
         state.settings.goldPriceLastUpdated = new Date().toISOString();
+        state.settings.goldPriceIsManual = false;
         save();
         if(document.getElementById('view-more').classList.contains('active')) renderPanel();
         renderAll();
         if(showToast) toast('اتحدث سعر الدهب ✓');
-      } else if(showToast){ toast('معرفناش نجيب سعر الدهب دلوقتي'); }
+      } else if(showToast){ toast('مصدر السعر رجّع بيانات غير متوقعة — جرب تدخل السعر يدويًا'); }
     })
-    .catch(()=>{ if(showToast) toast('مفيش اتصال بالإنترنت — هيفضل آخر سعر محفوظ'); })
+    .catch((err)=>{ if(showToast) toast('معرفناش نوصل لمصدر السعر — جرب تدخله يدويًا من الزرار تحت'); })
     .finally(()=>{ goldFetchInFlight=false; });
 }
 function goldPricePerGramBase(karat){
   if(!state.settings.goldPricePerGramUSD) return 0;
   const pure = convertAmount(state.settings.goldPricePerGramUSD, 'USD', state.settings.baseCurrency);
   return pure * (karat/24);
+}
+function setGoldPriceManually(){
+  const current = state.settings.goldPricePerGramUSD ? fmt(goldPricePerGramBase(24)) : '';
+  const input = prompt(`سعر جرام الدهب عيار 24 دلوقتي بالـ ${state.settings.baseCurrency}\n(تقدر تدور "سعر الدهب اليوم" في جوجل وتحط الرقم هنا)`, current);
+  if(input===null) return;
+  const val = parseFloat(input.replace(/[,\s]/g,''));
+  if(!val||val<=0){ toast('اكتب رقم صحيح'); return; }
+  // store as USD-equivalent internally so it stays consistent with the auto-fetch format
+  state.settings.goldPricePerGramUSD = convertAmount(val, state.settings.baseCurrency, 'USD');
+  state.settings.goldPriceLastUpdated = new Date().toISOString();
+  state.settings.goldPriceIsManual = true;
+  save();
+  if(document.getElementById('view-more').classList.contains('active')) renderPanel();
+  renderAll();
+  toast('اتحفظ سعر الدهب يدويًا ✓');
 }
 function assetValueOf(a){
   if(a.isGold && a.gramWeight && a.karat){
@@ -2258,13 +2278,17 @@ function assetsPanelHTML(){
   const hasGold = state.assets.some(a=>a.isGold);
   if(hasGold){
     const upd = state.settings.goldPriceLastUpdated ? fmtDateTime(state.settings.goldPriceLastUpdated) : 'لسه ما اتحدثش';
-    html += `<div class="card" style="margin-top:12px;display:flex;align-items:center;gap:12px;">
-      <div style="flex:1;">
-        <div style="font-weight:800;font-size:13px;">🥇 سعر جرام الدهب (عيار 24) دلوقتي</div>
-        <div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:3px;" class="money">${state.settings.goldPricePerGramUSD?fmt(goldPricePerGramBase(24))+' '+state.settings.baseCurrency:'—'}</div>
-        <div style="font-size:10.5px;color:var(--ink-faint);margin-top:2px;">آخر تحديث: ${upd}</div>
+    const tag = state.settings.goldPriceLastUpdated ? (state.settings.goldPriceIsManual?' · يدوي':' · تلقائي') : '';
+    html += `<div class="card" style="margin-top:12px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;">
+          <div style="font-weight:800;font-size:13px;">🥇 سعر جرام الدهب (عيار 24) دلوقتي</div>
+          <div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:3px;" class="money">${state.settings.goldPricePerGramUSD?fmt(goldPricePerGramBase(24))+' '+state.settings.baseCurrency:'—'}</div>
+          <div style="font-size:10.5px;color:var(--ink-faint);margin-top:2px;">آخر تحديث: ${upd}${tag}</div>
+        </div>
+        <button class="icon-btn" style="width:40px;height:40px;" onclick="fetchGoldPrice(true)">🔄</button>
       </div>
-      <button class="icon-btn" style="width:40px;height:40px;" onclick="fetchGoldPrice(true)">🔄</button>
+      <button class="btn-secondary" style="margin-top:10px;" onclick="setGoldPriceManually()">✏️ دخّل السعر بنفسك</button>
     </div>`;
   }
   if(state.assets.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الأسهم أو أي حاجة ليها قيمة'); return html; }
@@ -2313,6 +2337,7 @@ function assetKindFieldsHTML(kind, ex){
       <div class="field" style="text-align:center;background:var(--bg-elev-2);border-radius:12px;padding:12px;">
         <div style="font-size:11px;color:var(--ink-faint);">القيمة المتوقعة</div>
         <div id="goldPreviewValue" style="font-size:20px;font-weight:800;color:var(--gold);margin-top:3px;">—</div>
+        <div style="font-size:11px;color:var(--brand-2);font-weight:700;margin-top:8px;cursor:pointer;" onclick="setGoldPriceManually();setTimeout(updateGoldPreview,50);">مش دقيق؟ دخّل سعر الجرام بنفسك</div>
       </div>
     `;
   }
