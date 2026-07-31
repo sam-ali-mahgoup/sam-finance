@@ -608,11 +608,13 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
         <div class="m-item" onclick="openPanel('calc503020')"><div class="m-icon">🧮</div><div class="m-text"><div class="m-title">حاسبة 50/30/20</div><div class="m-sub">خطط ميزانيتك من دخلك الشهري</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('recurring')"><div class="m-icon">🔁</div><div class="m-text"><div class="m-title">الحركات المتكررة</div><div class="m-sub">اشتراكات وفواتير دورية</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('goals')"><div class="m-icon">🏁</div><div class="m-text"><div class="m-title">أهداف الادخار</div><div class="m-sub">وفّر لهدف معين</div></div><div class="m-arrow">‹</div></div>
+        <div class="m-item" onclick="openPanel('calendar')"><div class="m-icon">📆</div><div class="m-text"><div class="m-title">التقويم المالي</div><div class="m-sub">كل مواعيدك في مكان واحد</div></div><div class="m-arrow">‹</div></div>
       </div>
 
       <div class="section-title">الديون والأصول</div>
       <div class="card menu-list">
         <div class="m-item" onclick="openPanel('debts')"><div class="m-icon">🤝</div><div class="m-text"><div class="m-title">الديون والقروض</div><div class="m-sub">ليك وعليك</div></div><div class="m-arrow">‹</div></div>
+        <div class="m-item" onclick="openPanel('installments')"><div class="m-icon">💳</div><div class="m-text"><div class="m-title">الأقساط</div><div class="m-sub">مشتريات بالتقسيط</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('assets')"><div class="m-icon">💎</div><div class="m-text"><div class="m-title">الأصول والاستثمارات</div><div class="m-sub">دهب، أسهم، أو أي أصل تاني</div></div><div class="m-arrow">‹</div></div>
       </div>
 
@@ -622,6 +624,8 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
         <div class="m-item" onclick="openPanel('splitbill')"><div class="m-icon">🧾</div><div class="m-text"><div class="m-title">تقسيم الفاتورة</div><div class="m-sub">اقسم الحساب بينك وبين أصحابك</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('whatif')"><div class="m-icon">🔍</div><div class="m-text"><div class="m-title">لو هصرف كام؟</div><div class="m-sub">شوف تأثير مصروف قبل ما تعمله</div></div><div class="m-arrow">‹</div></div>
         <div class="m-item" onclick="openPanel('categories')"><div class="m-icon">🏷️</div><div class="m-text"><div class="m-title">التصنيفات</div><div class="m-sub">عدّل أو ضيف تصنيفات، وتصنيفات فرعية</div></div><div class="m-arrow">‹</div></div>
+        <div class="m-item" onclick="openPanel('merchants')"><div class="m-icon">📍</div><div class="m-text"><div class="m-title">الأماكن</div><div class="m-sub">إدارة قائمة أماكن الصرف</div></div><div class="m-arrow">‹</div></div>
+        <div class="m-item" onclick="openPanel('zakat')"><div class="m-icon">🕋</div><div class="m-text"><div class="m-title">حاسبة الزكاة</div><div class="m-sub">احسب زكاة مالك ودهبك</div></div><div class="m-arrow">‹</div></div>
       </div>
 
       <div class="section-title">تقارير وإحصائيات</div>
@@ -718,6 +722,8 @@ function defaultState(){
     debts:[],
     goals:[],
     assets:[],
+    merchants:[],
+    installments:[],
   };
 }
 
@@ -746,6 +752,10 @@ function load(){
   if(!state.goals) state.goals = [];
   if(!state.templates) state.templates = [];
   if(!state.assets) state.assets = [];
+  if(!state.merchants) state.merchants = [];
+  if(!state.installments) state.installments = [];
+  state.wallets.forEach(w=>{ if(w.archived===undefined) w.archived = false; });
+  state.transactions.forEach(t=>{ if(t.placeId===undefined) t.placeId = null; });
   if(state.settings.ratesAutoUpdate===undefined) state.settings.ratesAutoUpdate = true;
   if(state.settings.ratesLastUpdated===undefined) state.settings.ratesLastUpdated = null;
   if(state.settings.autoLockOnBackground===undefined) state.settings.autoLockOnBackground = true;
@@ -819,7 +829,18 @@ function toBase(amount,currency){
   return (amount * r) / baseR;
 }
 function walletById(id){ return state.wallets.find(w=>w.id===id); }
-function sortedWallets(){ return [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)); }
+function sortedWallets(){ return [...state.wallets].filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
+function allWalletsSorted(){ return [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)); }
+function merchantById(id){ return state.merchants.find(m=>m.id===id); }
+function resolveMerchant(name){
+  const trimmed = (name||'').trim();
+  if(!trimmed) return null;
+  const existing = state.merchants.find(m=>m.name.toLowerCase()===trimmed.toLowerCase());
+  if(existing) return existing.id;
+  const m = {id:uid(), name:trimmed};
+  state.merchants.push(m);
+  return m.id;
+}
 function catById(id){ return state.categories.find(c=>c.id===id); }
 function catChipLabel(c){
   if(c.parentId){ const p=catById(c.parentId); return `${c.icon} ${p?esc(p.name)+' ›':''} ${esc(c.name)}`; }
@@ -1141,7 +1162,7 @@ function renderDashboard(){
 
   // wallets scroll
   const ws = document.getElementById('dashWallets');
-  ws.innerHTML = [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)).map(w=>`
+  ws.innerHTML = sortedWallets().map(w=>`
     <div class="wallet-chip" onclick="switchView('wallets')">
       <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div></div>
       <div class="wc-name">${esc(w.name)}</div>
@@ -1332,13 +1353,14 @@ function initWalletDrag(){
 function renderWallets(){
   const wrap = document.getElementById('walletsList');
   if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك'); return; }
-  const sorted = [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0));
-  const hint = sorted.length>1 ? `<div style="font-size:11.5px;color:var(--ink-faint);text-align:center;margin-bottom:10px;">رتّب محافظك بالأسهم ▲▼ أو امسك ⠿ واسحب</div>` : '';
-  wrap.innerHTML = hint + sorted.map((w,i)=>`
+  const active = state.wallets.filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+  const archived = state.wallets.filter(w=>w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+  const hint = active.length>1 ? `<div style="font-size:11.5px;color:var(--ink-faint);text-align:center;margin-bottom:10px;">رتّب محافظك بالأسهم ▲▼ أو امسك ⠿ واسحب</div>` : '';
+  const activeHTML = active.map((w,i)=>`
     <div class="wallet-card" data-wid="${w.id}">
       <div class="wallet-order-btns">
         <button type="button" class="wob" onclick="moveWalletOrder('${w.id}',-1)" ${i===0?'disabled':''}>▲</button>
-        <button type="button" class="wob" onclick="moveWalletOrder('${w.id}',1)" ${i===sorted.length-1?'disabled':''}>▼</button>
+        <button type="button" class="wob" onclick="moveWalletOrder('${w.id}',1)" ${i===active.length-1?'disabled':''}>▼</button>
       </div>
       <div class="wallet-drag-handle">⠿</div>
       <div onclick="openWalletForm('${w.id}')" style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;">
@@ -1353,6 +1375,17 @@ function renderWallets(){
         </div>
       </div>
     </div>`).join('');
+  const archivedHTML = archived.length===0 ? '' : `
+    <div class="section-title">محافظ مجمدة</div>
+    ${archived.map(w=>`
+      <div class="wallet-card" style="opacity:.55;">
+        <div onclick="openWalletForm('${w.id}')" style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;">
+          <div class="wc-icon-lg" style="background:${w.color}22;color:${w.color};">${w.icon}</div>
+          <div class="wc-info"><div class="wc-name-lg">${esc(w.name)} 🧊</div><div class="wc-cur">${w.currency}</div></div>
+          <div><div class="wc-bal-lg money">${fmt(walletBalance(w.id))}</div></div>
+        </div>
+      </div>`).join('')}`;
+  wrap.innerHTML = hint + activeHTML + archivedHTML;
   initWalletDrag();
 }
 function moveWalletOrder(id, dir){
@@ -2047,21 +2080,21 @@ function renderMerchants(){
   const host = document.getElementById('merchantsCard');
   if(!host) return;
   const {start,end} = periodRange();
-  const byNote = {};
+  const byPlace = {};
   state.transactions.forEach(t=>{
-    if(t.type!=='expense'||t.date<start||t.date>end) return;
-    const key = (t.note||'').trim().toLowerCase();
-    if(!key) return;
+    if(t.type!=='expense'||t.date<start||t.date>end||!t.placeId) return;
+    const m = merchantById(t.placeId);
+    if(!m) return;
     const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
-    if(!byNote[key]) byNote[key] = {label:t.note.trim(), total:0, count:0};
-    byNote[key].total += toBase(t.amount,cur);
-    byNote[key].count++;
+    if(!byPlace[t.placeId]) byPlace[t.placeId] = {label:m.name, total:0, count:0};
+    byPlace[t.placeId].total += toBase(t.amount,cur);
+    byPlace[t.placeId].count++;
   });
-  const list = Object.values(byNote).sort((a,b)=>b.total-a.total).slice(0,6);
-  if(list.length===0){ host.innerHTML = emptyStateHTML('مفيش بيانات كفاية','اكتب ملاحظة (اسم المحل) وانت بتسجل حركاتك عشان نقدر نتابعلك ده'); return; }
+  const list = Object.values(byPlace).sort((a,b)=>b.total-a.total).slice(0,6);
+  if(list.length===0){ host.innerHTML = emptyStateHTML('مفيش بيانات كفاية','اكتب المكان وانت بتسجل حركاتك عشان نقدر نتابعلك ده'); return; }
   host.innerHTML = list.map(m=>`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
-      <div><div style="font-weight:700;font-size:13px;">${esc(m.label)}</div><div style="font-size:11px;color:var(--ink-faint);">${m.count} حركة</div></div>
+      <div><div style="font-weight:700;font-size:13px;">📍 ${esc(m.label)}</div><div style="font-size:11px;color:var(--ink-faint);">${m.count} حركة</div></div>
       <div class="money" style="font-weight:800;">${fmt(m.total)}</div>
     </div>`).join('');
 }
@@ -2238,7 +2271,7 @@ function openPanel(name){
   currentPanel = name;
   document.getElementById('morePanel-menu').style.display='none';
   document.getElementById('morePanel-sub').style.display='block';
-  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',assets:'الأصول والاستثمارات',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',appearance:'المظهر',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20',annual:'التقرير السنوي',splitbill:'تقسيم الفاتورة',badges:'الإنجازات',whatif:'لو هصرف كام؟'};
+  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',assets:'الأصول والاستثمارات',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',appearance:'المظهر',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20',annual:'التقرير السنوي',splitbill:'تقسيم الفاتورة',badges:'الإنجازات',whatif:'لو هصرف كام؟',installments:'الأقساط',calendar:'التقويم المالي',merchants:'الأماكن',zakat:'حاسبة الزكاة'};
   document.getElementById('panelTitle').textContent = titles[name]||'';
   renderPanel();
 }
@@ -2266,6 +2299,10 @@ function renderPanel(){
   else if(currentPanel==='splitbill'){ body.innerHTML = splitBillPanelHTML(); if(splitBillState.mode==='itemized') renderSplitItemsResult(); }
   else if(currentPanel==='badges') body.innerHTML = badgesPanelHTML();
   else if(currentPanel==='whatif') body.innerHTML = whatIfPanelHTML();
+  else if(currentPanel==='installments') body.innerHTML = installmentsPanelHTML();
+  else if(currentPanel==='calendar') body.innerHTML = calendarPanelHTML();
+  else if(currentPanel==='merchants') body.innerHTML = merchantsPanelHTML();
+  else if(currentPanel==='zakat') body.innerHTML = zakatPanelHTML();
 }
 
 /* ---- Budgets ---- */
@@ -3486,6 +3523,184 @@ function renderWhatIfResult(){
   `;
 }
 
+/* ---- Installments / BNPL ---- */
+function installmentsPanelHTML(){
+  let html = `<button class="btn-primary" onclick="openInstallmentForm()">+ قسط جديد</button>`;
+  if(state.installments.length===0){ html+=emptyStateHTML('مفيش أقساط مسجلة','زي موبايل أو جهاز اشتريته بالتقسيط'); return html; }
+  html += state.installments.slice().sort((a,b)=>(a.paidCount>=a.numInstallments)-(b.paidCount>=b.numInstallments)).map(ins=>{
+    const remaining = ins.numInstallments - ins.paidCount;
+    const done = remaining<=0;
+    const pct = Math.min(100,(ins.paidCount/ins.numInstallments)*100);
+    const nextDate = addInterval(ins.startDate, 'monthly');
+    return `<div class="debt-card" style="opacity:${done?0.6:1};">
+      <div onclick="openInstallmentForm('${ins.id}')">
+        <div class="debt-top">
+          <div class="debt-name">${esc(ins.itemName)}</div>
+          <div class="debt-tag owe">${done?'خلص':`باقي ${remaining} قسط`}</div>
+        </div>
+        <div class="debt-amt" style="color:var(--red);">${fmt(ins.installmentAmount)} ${state.settings.baseCurrency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> / شهريًا</span></div>
+        <div class="goal-track" style="margin-top:8px;"><div class="goal-fill" style="width:${pct}%;"></div></div>
+        <div class="debt-meta">${ins.paidCount} من ${ins.numInstallments} قسط اتسدد</div>
+      </div>
+      ${!done?`<button class="btn-secondary" style="margin-top:10px;" onclick="event.stopPropagation();payInstallment('${ins.id}')">💵 سجّل القسط الجاي</button>`:''}
+    </div>`;
+  }).join('');
+  return html;
+}
+function openInstallmentForm(id){
+  const ex = id ? state.installments.find(i=>i.id===id) : null;
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">${ex?'تعديل القسط':'قسط جديد'}</div>
+    <div class="field"><label>اسم الحاجة</label><input id="insName" value="${ex?esc(ex.itemName):''}" placeholder="مثال: آيفون جديد" ${ex?'disabled':''}></div>
+    <div class="row2">
+      <div class="field"><label>قيمة القسط الشهري</label><input id="insAmount" type="text" inputmode="decimal" value="${ex?ex.installmentAmount:''}" placeholder="0.00" onblur="evalCalcField(this)" ${ex?'disabled':''}></div>
+      <div class="field"><label>عدد الأقساط</label><input id="insCount" type="number" min="1" value="${ex?ex.numInstallments:'12'}" ${ex?'disabled':''}></div>
+    </div>
+    ${!ex?`<div class="field"><label>تاريخ أول قسط</label><input id="insStart" type="date" value="${todayStr()}"></div>`:''}
+    <button class="btn-primary" onclick="saveInstallment(${ex?`'${ex.id}'`:'null'})">حفظ</button>
+    ${ex?`<button class="btn-danger-text" onclick="deleteInstallment('${ex.id}')">حذف</button>`:''}
+  `);
+}
+function saveInstallment(id){
+  if(id){ closeModal(); return; }
+  const itemName = document.getElementById('insName').value.trim();
+  const installmentAmount = parseFloat(document.getElementById('insAmount').value);
+  const numInstallments = parseInt(document.getElementById('insCount').value);
+  const startDate = document.getElementById('insStart').value;
+  if(!itemName){ toast('اكتب اسم الحاجة'); return; }
+  if(!installmentAmount||installmentAmount<=0){ toast('اكتب مبلغ صحيح'); return; }
+  if(!numInstallments||numInstallments<1){ toast('اكتب عدد أقساط صحيح'); return; }
+  if(!startDate){ toast('اختار تاريخ'); return; }
+  state.installments.push({id:uid(), itemName, installmentAmount, numInstallments, startDate, paidCount:0});
+  save(); closeModal(); renderAll(); toast('اتحفظ القسط');
+}
+function deleteInstallment(id){ state.installments=state.installments.filter(i=>i.id!==id); save(); closeModal(); renderAll(); toast('اتمسح'); }
+function payInstallment(id){
+  const ins = state.installments.find(i=>i.id===id);
+  if(!ins) return;
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">تسجيل قسط: ${esc(ins.itemName)}</div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">قسط رقم ${ins.paidCount+1} من ${ins.numInstallments} · ${fmt(ins.installmentAmount)} ${state.settings.baseCurrency}</div>
+    <div class="field"><label>المحفظة</label>
+      <div class="chip-select" id="insPayWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'insPayWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+    </div>
+    <button class="btn-primary" onclick="confirmPayInstallment('${ins.id}')">تسجيل الدفعة</button>
+  `);
+}
+function confirmPayInstallment(id){
+  const ins = state.installments.find(i=>i.id===id);
+  if(!ins) return;
+  const wSel = document.getElementById('insPayWalletChips').querySelector('.sel');
+  if(!wSel){ toast('اختار محفظة'); return; }
+  state.transactions.push({id:uid(), type:'expense', walletId:wSel.dataset.w, categoryId:'cat_debt_out', amount:ins.installmentAmount, note:'قسط: '+ins.itemName, date:todayStr(), installmentId:ins.id});
+  ins.paidCount++;
+  const justFinished = ins.paidCount>=ins.numInstallments;
+  save(); closeModal(); renderAll(); toast('اتسجل القسط ✓');
+  if(justFinished) setTimeout(fireConfetti, 300);
+}
+
+/* ---- Unified financial calendar ---- */
+function calendarPanelHTML(){
+  const events = [];
+  state.recurring.forEach(r=>{
+    if(r.paused) return;
+    events.push({date:r.nextDate, icon:r.type==='income'?'💰':'🔁', label:r.name, sub: r.type==='income'?'دخل متوقع':'هيتخصم', color: r.type==='income'?'var(--brand-2)':'var(--red)'});
+  });
+  state.debts.forEach(d=>{
+    if(d.settled || !d.dueDate) return;
+    events.push({date:d.dueDate, icon:'🤝', label:(d.direction==='owe'?'سداد: ':'استلام: ')+d.person, sub: fmt(d.amount-(d.paidAmount||0))+' '+state.settings.baseCurrency, color:'var(--gold)'});
+  });
+  state.installments.forEach(ins=>{
+    if(ins.paidCount>=ins.numInstallments) return;
+    let due = ins.startDate;
+    for(let i=0;i<ins.paidCount;i++) due = addInterval(due,'monthly');
+    events.push({date:due, icon:'💳', label:'قسط: '+ins.itemName, sub: fmt(ins.installmentAmount)+' '+state.settings.baseCurrency, color:'var(--red)'});
+  });
+  const today = todayStr();
+  const upcoming = events.filter(e=>e.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
+  if(upcoming.length===0) return emptyStateHTML('مفيش مواعيد قريبة','هتظهر هنا الاشتراكات ومواعيد سداد الديون والأقساط الجاية');
+  let html=''; let lastDate=null;
+  upcoming.forEach(e=>{
+    if(e.date!==lastDate){ html += `<div class="day-group-label">${fmtDate(e.date)}</div>`; lastDate=e.date; }
+    html += `<div class="card" style="padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:20px;">${e.icon}</div>
+      <div style="flex:1;"><div style="font-weight:700;font-size:13.5px;">${esc(e.label)}</div><div style="font-size:11px;color:var(--ink-faint);">${esc(e.sub)}</div></div>
+      <div class="money" style="color:${e.color};font-weight:800;font-size:12px;">${fmtDate(e.date)}</div>
+    </div>`;
+  });
+  return html;
+}
+
+/* ---- Merchants / places management ---- */
+function merchantsPanelHTML(){
+  if(state.merchants.length===0) return emptyStateHTML('مفيش أماكن لسه','هتتضاف تلقائي أول ما تكتب مكان في أي حركة صرف');
+  return state.merchants.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(m=>{
+    const count = state.transactions.filter(t=>t.placeId===m.id).length;
+    return `<div class="card menu-list" style="margin-bottom:8px;">
+      <div class="m-item" onclick="editMerchantName('${m.id}')">
+        <div class="m-icon">📍</div>
+        <div class="m-text"><div class="m-title">${esc(m.name)}</div><div class="m-sub">${count} حركة</div></div>
+        <button class="icon-btn" style="width:34px;height:34px;" onclick="event.stopPropagation();deleteMerchant('${m.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function editMerchantName(id){
+  const m = merchantById(id);
+  if(!m) return;
+  const newName = prompt('عدّل اسم المكان', m.name);
+  if(!newName || !newName.trim()) return;
+  m.name = newName.trim();
+  save(); openPanel('merchants'); toast('اتحدث');
+}
+function deleteMerchant(id){
+  if(!confirm('هتشيل المكان ده من القايمة (الحركات القديمة هتفضل زي ما هي بس من غير مكان مرتبط)؟')) return;
+  state.merchants = state.merchants.filter(m=>m.id!==id);
+  state.transactions.forEach(t=>{ if(t.placeId===id) t.placeId=null; });
+  save(); openPanel('merchants'); renderAll(); toast('اتمسح');
+}
+
+/* ---- Zakat calculator ---- */
+function zakatPanelHTML(){
+  const goldNisabGrams = 85;
+  const pricePerGram24k = state.settings.goldPricePerGramUSD ? goldPricePerGramBase(24) : 0;
+  const nisabValue = pricePerGram24k * goldNisabGrams;
+  const cashTotal = totalBaseBalance();
+  const goldAssetsTotal = state.assets.filter(a=>a.isGold).reduce((s,a)=>s+assetValueOf(a),0);
+  const otherAssetsTotal = state.assets.filter(a=>!a.isGold).reduce((s,a)=>s+toBase(a.value,a.currency),0);
+  const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const zakatableWealth = Math.max(0, cashTotal + goldAssetsTotal + otherAssetsTotal - debtsOwed);
+  const aboveNisab = pricePerGram24k>0 && zakatableWealth >= nisabValue;
+  const zakatDue = aboveNisab ? zakatableWealth * 0.025 : 0;
+  return `
+    ${!pricePerGram24k?`<div class="card" style="border-color:var(--gold);margin-bottom:12px;"><div style="font-size:12.5px;color:var(--ink-dim);">محتاجين سعر الدهب عشان نحسب النصاب بدقة. روح لـ "الأصول والاستثمارات" وحدّث سعر الدهب الأول.</div></div>`:''}
+    <div class="stat-grid">
+      <div class="stat-box"><div class="sv money">${fmt(zakatableWealth)}</div><div class="sl">إجمالي مالك القابل للزكاة</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--gold);">${fmt(nisabValue)}</div><div class="sl">قيمة النصاب (85 جم دهب)</div></div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div style="font-weight:800;font-size:13px;margin-bottom:10px;">تفاصيل الحساب</div>
+      <div class="bm-top"><span>كاش ومحافظ</span><span class="money">${fmt(cashTotal)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>أصول دهب</span><span class="money">${fmt(goldAssetsTotal)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>أصول تانية</span><span class="money">${fmt(otherAssetsTotal)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>ناقص: ديون عليك</span><span class="money" style="color:var(--red);">-${fmt(debtsOwed)}</span></div>
+    </div>
+    <div class="card" style="margin-top:14px;background:${aboveNisab?'rgba(79,209,165,.1)':'var(--bg-elev-2)'};border-color:${aboveNisab?'var(--brand-2)':'var(--border)'};text-align:center;padding:20px;">
+      ${aboveNisab?`
+        <div style="font-size:12.5px;color:var(--ink-dim);">مالك فوق النصاب — الزكاة المستحقة (٢.٥٪)</div>
+        <div class="money" style="font-size:30px;font-weight:800;color:var(--brand-2);margin-top:6px;">${fmt(zakatDue)} ${state.settings.baseCurrency}</div>
+      `:`
+        <div style="font-size:13px;color:var(--ink-dim);">مالك لسه تحت النصاب، مفيش زكاة واجبة عليك دلوقتي</div>
+      `}
+    </div>
+    <div style="font-size:11px;color:var(--ink-faint);margin-top:12px;padding:0 4px;line-height:1.7;">
+      ⚠️ ده حساب تقريبي مبني على نصاب الذهب (٨٥ جم) وسعره الحالي. الزكاة بتبقى واجبة فعليًا لما يعدي "الحول" (سنة هجرية كاملة) على المبلغ وهو فوق النصاب. لو مش متأكد، استشير أهل العلم في حالتك تحديدًا.
+    </div>
+  `;
+}
+
 /* =========================================================================
    MODAL helpers
    ========================================================================= */
@@ -3550,6 +3765,8 @@ function openWalletForm(id){
     <div style="font-size:11px;color:var(--ink-faint);margin-top:-6px;margin-bottom:14px;">ده تنظيمي بس (اسم يفكرك إن المحفظة دي مشتركة) — مفيش مزامنة حقيقية بين جهازين، البيانات لسه محلية على جهازك.</div>
     ${!ex?`<div class="field"><label>الرصيد الافتتاحي (اختياري)</label><input id="wOpening" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)"></div>`:''}
     <button class="btn-primary" onclick="saveWallet(${ex?`'${ex.id}'`:'null'})">حفظ</button>
+    ${ex?`<button class="btn-secondary" onclick="openWalletStatementPicker('${ex.id}')">📄 كشف حساب شهري</button>`:''}
+    ${ex?`<button class="btn-secondary" onclick="toggleArchiveWallet('${ex.id}')">${ex.archived?'🔓 إلغاء التجميد':'🧊 تجميد المحفظة'}</button>`:''}
     ${ex?`<button class="btn-danger-text" onclick="deleteWallet('${ex.id}')">حذف المحفظة</button>`:''}
   `);
 }
@@ -3587,6 +3804,67 @@ function deleteWallet(id){
   state.wallets = state.wallets.filter(w=>w.id!==id);
   save(); closeModal(); renderAll(); toast('اتمسحت المحفظة');
 }
+function toggleArchiveWallet(id){
+  const w = walletById(id);
+  w.archived = !w.archived;
+  save(); closeModal(); renderAll();
+  toast(w.archived?'اتجمدت المحفظة':'اتلغى التجميد');
+}
+function openWalletStatementPicker(walletId){
+  const now = new Date();
+  const months = [];
+  for(let i=0;i<12;i++) months.push(new Date(now.getFullYear(), now.getMonth()-i, 1));
+  const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">كشف حساب شهري</div>
+    <div class="field"><label>اختار الشهر</label>
+      <select id="statementMonth">${months.map(d=>`<option value="${d.getFullYear()}-${d.getMonth()}">${monthNames[d.getMonth()]} ${d.getFullYear()}</option>`).join('')}</select>
+    </div>
+    <button class="btn-primary" onclick="exportWalletStatement('${walletId}')">🖨️ إنشاء الكشف</button>
+  `);
+}
+function exportWalletStatement(walletId){
+  const w = walletById(walletId);
+  const [y,m] = document.getElementById('statementMonth').value.split('-').map(Number);
+  const start = localDateStr(new Date(y,m,1));
+  const end = localDateStr(new Date(y,m+1,0));
+  const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  let runningBalance = 0;
+  state.transactions.forEach(t=>{
+    if(t.date>=start) return;
+    if(t.type==='income' && t.walletId===walletId) runningBalance+=t.amount;
+    else if(t.type==='expense' && t.walletId===walletId) runningBalance-=t.amount;
+    else if(t.type==='transfer'){
+      if(t.walletId===walletId) runningBalance-=t.amount;
+      if(t.toWalletId===walletId) runningBalance+=t.toAmount;
+    }
+  });
+  const openingBalance = runningBalance;
+  const monthTx = state.transactions.filter(t=> t.date>=start && t.date<=end && (t.walletId===walletId || t.toWalletId===walletId)).sort((a,b)=>a.date.localeCompare(b.date));
+  let rows = '';
+  monthTx.forEach(t=>{
+    let label, amountStr;
+    if(t.type==='income'){ label='قبض'; runningBalance+=t.amount; amountStr='+'+fmt(t.amount); }
+    else if(t.type==='expense'){ label=catById(t.categoryId)?.name||'صرف'; runningBalance-=t.amount; amountStr='-'+fmt(t.amount); }
+    else {
+      if(t.walletId===walletId){ label='تحويل لـ '+(walletById(t.toWalletId)?.name||'—'); runningBalance-=t.amount; amountStr='-'+fmt(t.amount); }
+      else { label='تحويل من '+(walletById(t.walletId)?.name||'—'); runningBalance+=t.toAmount; amountStr='+'+fmt(t.toAmount); }
+    }
+    rows += `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.note||label)}</td><td>${amountStr}</td><td>${fmt(runningBalance)}</td></tr>`;
+  });
+  document.getElementById('printReport').innerHTML = `
+    <h1>كشف حساب: ${esc(w.name)}</h1>
+    <div class="pr-meta">شهر ${monthNames[m]} ${y} · العملة: ${w.currency}</div>
+    <div class="pr-totals">
+      <div class="pr-total-box">رصيد أول الشهر<b>${fmt(openingBalance)}</b></div>
+      <div class="pr-total-box">رصيد آخر الشهر<b>${fmt(runningBalance)}</b></div>
+    </div>
+    <h2>الحركات</h2>
+    <table><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>الرصيد بعدها</th></tr>${rows||'<tr><td colspan="4">مفيش حركات في الشهر ده</td></tr>'}</table>
+  `;
+  setTimeout(()=>window.print(), 100);
+}
 
 /* =========================================================================
    TRANSACTION FORM (income / expense / transfer)
@@ -3595,6 +3873,7 @@ function openTxForm(prefType){
   const type = prefType||'expense';
   openModal(txFormHTML(type));
   bindTxTypeSwitch();
+  if(type!=='transfer') renderPlaceSuggestions();
 }
 function txFormHTML(type, ex){
   const cats = state.categories.filter(c=>c.type===(type==='income'?'income':'expense'));
@@ -3641,6 +3920,10 @@ function txFormBodyHTML(type, ex){
       <div class="chip-select" id="txCatChips">${cats.map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'txCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
     </div>
     <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:todayStr()}"></div>
+    <div class="field"><label>المكان (اختياري)</label>
+      <input id="txPlaceInput" value="${ex&&ex.placeId?esc(merchantById(ex.placeId)?.name||''):''}" placeholder="مثال: كارفور، أوبر..." oninput="renderPlaceSuggestions()">
+      <div class="chip-select" id="txPlaceChips" style="margin-top:8px;"></div>
+    </div>
     <div class="field"><label>ملاحظة (اختياري)</label><input id="txNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="مثال: عشا مع الأصحاب"></div>
     <div class="field"><label>تاجز (اختياري، افصل بفاصلة)</label><input id="txTags" value="${ex&&ex.tags?ex.tags.join('، '):''}" placeholder="مثال: شغل، استرداد ضريبي"></div>
     <div class="field"><label>إيصال (اختياري)</label><input type="file" accept="image/*" id="txReceipt" onchange="previewReceipt(this)">
@@ -3654,6 +3937,23 @@ function switchTxType(type){
   currentTxType = type;
   document.querySelectorAll('#txType button').forEach(b=>b.classList.toggle('active', b.dataset.t===type));
   document.getElementById('txFormBody').innerHTML = txFormBodyHTML(type);
+  if(type!=='transfer') renderPlaceSuggestions();
+}
+function renderPlaceSuggestions(){
+  const input = document.getElementById('txPlaceInput');
+  const wrap = document.getElementById('txPlaceChips');
+  if(!input || !wrap) return;
+  const q = input.value.trim().toLowerCase();
+  let list = state.merchants;
+  if(q) list = list.filter(m=>m.name.toLowerCase().includes(q));
+  list = list.slice(0,8);
+  wrap.innerHTML = list.map(m=>`<button type="button" data-mid="${m.id}" onclick="selectPlaceChip(this)">📍 ${esc(m.name)}</button>`).join('');
+}
+function selectPlaceChip(btn){
+  const m = merchantById(btn.dataset.mid);
+  if(!m) return;
+  document.getElementById('txPlaceInput').value = m.name;
+  renderPlaceSuggestions();
 }
 function recalcTransferReceived(){
   const amt = parseFloat(document.getElementById('txAmount').value)||0;
@@ -3694,6 +3994,8 @@ function saveTx(id){
     const note = document.getElementById('txNote').value.trim();
     const tagsRaw = document.getElementById('txTags')?.value || '';
     const tags = tagsRaw.split(/[،,]/).map(s=>s.trim()).filter(Boolean);
+    const placeInput = document.getElementById('txPlaceInput')?.value || '';
+    const placeId = resolveMerchant(placeInput);
     if(!amount||amount<=0){ toast('اكتب مبلغ صحيح'); return; }
     if(!wSel){ toast('اختار محفظة'); return; }
     if(!cSel){ toast('اختار تصنيف'); return; }
@@ -3701,7 +4003,7 @@ function saveTx(id){
       const dup = state.transactions.find(t=>t.id!==id && t.type===type && t.walletId===wSel.dataset.w && t.categoryId===cSel.dataset.cat && t.amount===amount && t.date===date);
       if(dup && !confirm('فيه حركة مشابهة مسجلة بنفس المبلغ والتصنيف واليوم ده. تسجلها برضه؟')) return;
     }
-    const obj = {type, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, amount, note, date, tags};
+    const obj = {type, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, amount, note, date, tags, placeId};
     if(pendingReceiptData) obj.receipt = pendingReceiptData;
     if(id){ Object.assign(state.transactions.find(t=>t.id===id), obj); }
     else { state.transactions.push({id:uid(), ...obj}); }
@@ -3714,7 +4016,7 @@ function openTxDetail(id){
   if(!t) return;
   openModal(txFormHTML(t.type, t));
   bindTxTypeSwitch();
-  if(t.type==='transfer'){ /* rate not stored separately, fine */ }
+  if(t.type!=='transfer') renderPlaceSuggestions();
 }
 function deleteTx(id){
   const idx = state.transactions.findIndex(t=>t.id===id);
