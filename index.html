@@ -692,6 +692,17 @@ function defaultState(){
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
+/* Timezone-safe local date formatting (YYYY-MM-DD).
+   IMPORTANT: never use date.toISOString().slice(0,10) for local dates —
+   toISOString() converts to UTC first, which silently shifts the date
+   backward by a day for any timezone ahead of UTC (like Egypt, UTC+2/+3)
+   whenever the Date object was built at local midnight. That bug was
+   corrupting month/year boundaries throughout reports and default dates. */
+function localDateStr(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return localDateStr(new Date()); }
+
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -726,6 +737,9 @@ function load(){
   if(state.settings.onboardingSeen===undefined) state.settings.onboardingSeen = false;
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
+  if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
+  if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
+  state.assets.forEach(a=>{ if(a.isGold===undefined) a.isGold=false; if(a.gramWeight===undefined) a.gramWeight=null; if(a.karat===undefined) a.karat=null; });
   state.wallets.forEach(w=>{ if(w.sharedWith===undefined) w.sharedWith = null; if(w.order===undefined) w.order = 0; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
@@ -773,6 +787,7 @@ function toBase(amount,currency){
   return (amount * r) / baseR;
 }
 function walletById(id){ return state.wallets.find(w=>w.id===id); }
+function sortedWallets(){ return [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)); }
 function catById(id){ return state.categories.find(c=>c.id===id); }
 function catChipLabel(c){
   if(c.parentId){ const p=catById(c.parentId); return `${c.icon} ${p?esc(p.name)+' ›':''} ${esc(c.name)}`; }
@@ -817,6 +832,43 @@ function ratesFreshEnoughToSkip(){
   return hoursSince < 6;
 }
 
+/* ---- Live gold price (per gram, 24k/pure) ---- */
+let goldFetchInFlight = false;
+function goldPriceFreshEnoughToSkip(){
+  if(!state.settings.goldPriceLastUpdated) return false;
+  const hoursSince = (Date.now() - new Date(state.settings.goldPriceLastUpdated).getTime())/3600000;
+  return hoursSince < 6;
+}
+function fetchGoldPrice(showToast){
+  if(goldFetchInFlight) return;
+  goldFetchInFlight = true;
+  fetch('https://xaus.com/api/v1/spot?unit=gram')
+    .then(r=>r.json())
+    .then(data=>{
+      if(data && data.per_gram_usd){
+        state.settings.goldPricePerGramUSD = data.per_gram_usd;
+        state.settings.goldPriceLastUpdated = new Date().toISOString();
+        save();
+        if(document.getElementById('view-more').classList.contains('active')) renderPanel();
+        renderAll();
+        if(showToast) toast('اتحدث سعر الدهب ✓');
+      } else if(showToast){ toast('معرفناش نجيب سعر الدهب دلوقتي'); }
+    })
+    .catch(()=>{ if(showToast) toast('مفيش اتصال بالإنترنت — هيفضل آخر سعر محفوظ'); })
+    .finally(()=>{ goldFetchInFlight=false; });
+}
+function goldPricePerGramBase(karat){
+  if(!state.settings.goldPricePerGramUSD) return 0;
+  const pure = convertAmount(state.settings.goldPricePerGramUSD, 'USD', state.settings.baseCurrency);
+  return pure * (karat/24);
+}
+function assetValueOf(a){
+  if(a.isGold && a.gramWeight && a.karat){
+    return goldPricePerGramBase(a.karat) * a.gramWeight;
+  }
+  return a.value||0;
+}
+
 function walletBalance(walletId){
   let bal = 0;
   state.transactions.forEach(t=>{
@@ -842,10 +894,10 @@ function addInterval(dateStr, freq){
   else if(freq==='weekly') d.setDate(d.getDate()+7);
   else if(freq==='monthly') d.setMonth(d.getMonth()+1);
   else if(freq==='yearly') d.setFullYear(d.getFullYear()+1);
-  return d.toISOString().slice(0,10);
+  return localDateStr(d);
 }
 function processRecurring(){
-  const today = new Date().toISOString().slice(0,10);
+  const today = todayStr();
   let applied = 0;
   state.recurring.forEach(r=>{
     if(r.paused) return;
@@ -996,8 +1048,8 @@ window.addEventListener('resize', ()=>moveNavIndicator());
    ========================================================================= */
 function currentMonthRange(){
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-  const end = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  const start = localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
+  const end = localDateStr(new Date(now.getFullYear(), now.getMonth()+1, 0));
   return {start,end};
 }
 
@@ -1431,7 +1483,7 @@ function periodRange(){
   if(reportPeriod==='week'){ start=new Date(now); start.setDate(now.getDate()-6); }
   else if(reportPeriod==='month'){ start=new Date(now.getFullYear(),now.getMonth(),1); }
   else { start=new Date(now.getFullYear(),0,1); }
-  return { start: start.toISOString().slice(0,10), end: now.toISOString().slice(0,10) };
+  return { start: localDateStr(start), end: localDateStr(now) };
 }
 /* ---- End-of-month forecast ---- */
 function renderForecast(){
@@ -1476,8 +1528,8 @@ function renderAnomalies(){
   const prevSumByCat = {}, prevCountByCat = {};
   for(let i=1;i<=3;i++){
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    const s = new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);
-    const e = new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+    const s = localDateStr(new Date(d.getFullYear(),d.getMonth(),1));
+    const e = localDateStr(new Date(d.getFullYear(),d.getMonth()+1,0));
     state.transactions.forEach(t=>{
       if(t.type!=='expense'||t.date<s||t.date>e) return;
       const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
@@ -1510,7 +1562,7 @@ function renderSameDayLastYear(){
   if(!host) return;
   const now = new Date();
   const lastYearDate = new Date(now.getFullYear()-1, now.getMonth(), now.getDate());
-  const dateStr = lastYearDate.toISOString().slice(0,10);
+  const dateStr = localDateStr(lastYearDate);
   const dayTx = state.transactions.filter(t=>t.date===dateStr);
   if(dayTx.length===0){ host.innerHTML=''; return; }
   let inc=0, exp=0;
@@ -1535,7 +1587,7 @@ function calcBudgetStreak(){
   let streak = 0;
   for(let i=0;i<60;i++){
     const d = new Date(now); d.setDate(now.getDate()-i);
-    const dateStr = d.toISOString().slice(0,10);
+    const dateStr = localDateStr(d);
     let daySpend = 0;
     state.transactions.forEach(t=>{
       if(t.type!=='expense'||t.date!==dateStr) return;
@@ -1562,7 +1614,7 @@ function exportPDFReport(){
     const c = catById(cid);
     return `<tr><td>${c?c.icon+' '+esc(c.name):'أخرى'}</td><td>${fmt(v)} ${state.settings.baseCurrency}</td><td>${((v/exp)*100).toFixed(0)}%</td></tr>`;
   }).join('');
-  const walletRows = state.wallets.map(w=>`<tr><td>${w.icon} ${esc(w.name)}</td><td>${fmt(walletBalance(w.id))} ${w.currency}</td></tr>`).join('');
+  const walletRows = sortedWallets().map(w=>`<tr><td>${w.icon} ${esc(w.name)}</td><td>${fmt(walletBalance(w.id))} ${w.currency}</td></tr>`).join('');
   const txRows = state.transactions.filter(t=>t.date>=start&&t.date<=end).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60).map(t=>{
     const c = catById(t.categoryId); const w = walletById(t.walletId);
     const label = t.type==='income'?'دخل':t.type==='expense'?'صرف':'تحويل';
@@ -1570,7 +1622,7 @@ function exportPDFReport(){
   }).join('');
   document.getElementById('printReport').innerHTML = `
     <h1>SAM Finance — تقرير مالي</h1>
-    <div class="pr-meta">الفترة: ${fmtDate(start)} إلى ${fmtDate(end)} · اتصدر بتاريخ ${fmtDate(new Date().toISOString().slice(0,10))}</div>
+    <div class="pr-meta">الفترة: ${fmtDate(start)} إلى ${fmtDate(end)} · اتصدر بتاريخ ${fmtDate(todayStr())}</div>
     <div class="pr-totals">
       <div class="pr-total-box">إجمالي الدخل<b>${fmt(inc)} ${state.settings.baseCurrency}</b></div>
       <div class="pr-total-box">إجمالي الصرف<b>${fmt(exp)} ${state.settings.baseCurrency}</b></div>
@@ -1614,7 +1666,7 @@ function renderReports(){
   let prevExp=0;
   state.transactions.forEach(t=>{
     if(t.type!=='expense') return;
-    const ds = prevStart.toISOString().slice(0,10), de = prevEnd.toISOString().slice(0,10);
+    const ds = localDateStr(prevStart), de = localDateStr(prevEnd);
     if(t.date>=ds && t.date<=de) prevExp += toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency);
   });
   const cmpEl = document.getElementById('repCompare');
@@ -1707,7 +1759,7 @@ function renderNetWorthChart(){
   const months = [];
   for(let i=11;i>=0;i--) months.push(new Date(now.getFullYear(), now.getMonth()-i, 1));
   const points = months.map(d=>{
-    const endOfMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().slice(0,10);
+    const endOfMonth = localDateStr(new Date(d.getFullYear(), d.getMonth()+1, 0));
     let net = 0;
     state.wallets.forEach(w=>{
       let bal = 0;
@@ -1791,8 +1843,8 @@ function renderBarChart(){
     months.push(d);
   }
   const data = months.map(d=>{
-    const start = new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);
-    const end = new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);
+    const start = localDateStr(new Date(d.getFullYear(),d.getMonth(),1));
+    const end = localDateStr(new Date(d.getFullYear(),d.getMonth()+1,0));
     let inc=0,exp=0;
     state.transactions.forEach(t=>{
       if(t.date<start||t.date>end) return;
@@ -1950,12 +2002,12 @@ function openRecurringForm(id){
       </div>
     </div>
     <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="recWalletChips">${state.wallets.map(w=>`<button type="button" class="${ex&&ex.walletId===w.id?'sel':(!ex&&w===state.wallets[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'recWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="recWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex&&ex.walletId===w.id?'sel':(!ex&&w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'recWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
     <div class="field"><label>التصنيف</label>
       <div class="chip-select" id="recCatChips">${state.categories.filter(c=>c.type===(ex?ex.type:'expense')).map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'recCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
     </div>
-    <div class="field"><label>أول موعد</label><input id="recNext" type="date" value="${ex?ex.nextDate:new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>أول موعد</label><input id="recNext" type="date" value="${ex?ex.nextDate:todayStr()}"></div>
     <button class="btn-primary" onclick="saveRecurring(${ex?`'${ex.id}'`:'null'})">حفظ</button>
     ${ex?`<button class="btn-secondary" onclick="togglePauseRecurring('${ex.id}')">${ex.paused?'استئناف':'إيقاف مؤقت'}</button><button class="btn-danger-text" onclick="deleteRecurring('${ex.id}')">حذف</button>`:''}
   `);
@@ -2043,7 +2095,7 @@ function openDebtForm(id){
     ${!ex?`<div class="field"><label>سجّل الحركة في محفظة؟ (اختياري)</label>
       <div class="chip-select" id="debtWalletChips">
         <button type="button" class="sel" data-w="" onclick="selectChip(this,'debtWalletChips')">بدون</button>
-        ${state.wallets.map(w=>`<button type="button" data-w="${w.id}" onclick="selectChip(this,'debtWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}
+        ${sortedWallets().map(w=>`<button type="button" data-w="${w.id}" onclick="selectChip(this,'debtWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}
       </div>
       <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">لو اخترت محفظة، هيتسجل المبلغ كحركة فعلية فيها دلوقتي (قبض لو أنت مديون، صرف لو مديون لك).</div>
     </div>`:`<div style="font-size:11px;color:var(--ink-faint);margin-top:-6px;margin-bottom:14px;">المبلغ والعملة مقفولين بعد الإنشاء عشان يفضلوا متوافقين مع أي حركات مسجلة. لتسجيل دفعة استخدم زرار "تسجيل دفعة" في الكارت.</div>`}
@@ -2071,7 +2123,7 @@ function saveDebt(id){
     state.debts.push(debt);
     if(walletId){
       const txType = direction==='owe' ? 'income' : 'expense';
-      state.transactions.push({id:uid(), type:txType, walletId, categoryId: direction==='owe'?'cat_debt_in':'cat_debt_out', amount, note:'دين: '+person, date:new Date().toISOString().slice(0,10), debtId:debt.id});
+      state.transactions.push({id:uid(), type:txType, walletId, categoryId: direction==='owe'?'cat_debt_in':'cat_debt_out', amount, note:'دين: '+person, date:todayStr(), debtId:debt.id});
     }
   }
   save(); closeModal(); renderAll(); toast('اتحفظ');
@@ -2086,9 +2138,9 @@ function openDebtPaymentForm(id){
     <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">${d.direction==='owe'?'هتدفع من محفظتك':'هتقبض في محفظتك'} · متبقي ${fmt(remaining)} ${d.currency}</div>
     <div class="field"><label>المبلغ</label><input id="debtPayAmount" type="text" inputmode="decimal" value="${remaining}" placeholder="0.00" onblur="evalCalcField(this)"></div>
     <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="debtPayWalletChips">${state.wallets.map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'debtPayWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="debtPayWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'debtPayWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
-    <div class="field"><label>التاريخ</label><input id="debtPayDate" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>التاريخ</label><input id="debtPayDate" type="date" value="${todayStr()}"></div>
     <button class="btn-primary" onclick="saveDebtPayment('${d.id}')">تسجيل الدفعة</button>
   `);
 }
@@ -2171,7 +2223,7 @@ function openGoalMoveForm(id, mode){
     <div class="sheet-title">${isContribute?'ساهم في':'اسحب من'}: ${esc(g.name)}</div>
     <div class="field"><label>المبلغ (${g.currency})</label><input id="goalMoveAmount" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)"></div>
     <div class="field"><label>${isContribute?'من محفظة':'إلى محفظة'}</label>
-      <div class="chip-select" id="goalMoveWalletChips">${state.wallets.map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'goalMoveWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="goalMoveWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'goalMoveWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
     <button class="btn-primary" onclick="saveGoalMove('${g.id}','${mode}')">${isContribute?'تسجيل المساهمة':'تسجيل السحب'}</button>
   `);
@@ -2184,7 +2236,7 @@ function saveGoalMove(id, mode){
   if(!amount||amount<=0){toast('اكتب مبلغ صحيح');return;}
   if(!wSel){toast('اختار محفظة');return;}
   const walletId = wSel.dataset.w;
-  const date = new Date().toISOString().slice(0,10);
+  const date = todayStr();
   if(mode==='contribute'){
     state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_savings', amount, note:'مساهمة: '+g.name, date, goalId:g.id});
     g.current = (g.current||0) + amount;
@@ -2199,50 +2251,115 @@ function deleteGoal(id){ state.goals=state.goals.filter(g=>g.id!==id); save(); c
 /* ---- Assets / Investments ---- */
 const ASSET_ICONS = ['💎','🥇','📈','🏠','🚗','💻','⌚','🎨'];
 function totalAssetsBase(){
-  return state.assets.reduce((s,a)=> s + toBase(a.value, a.currency), 0);
+  return state.assets.reduce((s,a)=> s + (a.isGold ? assetValueOf(a) : toBase(a.value, a.currency)), 0);
 }
 function assetsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openAssetForm()">+ أصل جديد</button>`;
+  const hasGold = state.assets.some(a=>a.isGold);
+  if(hasGold){
+    const upd = state.settings.goldPriceLastUpdated ? fmtDateTime(state.settings.goldPriceLastUpdated) : 'لسه ما اتحدثش';
+    html += `<div class="card" style="margin-top:12px;display:flex;align-items:center;gap:12px;">
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:13px;">🥇 سعر جرام الدهب (عيار 24) دلوقتي</div>
+        <div style="font-size:16px;font-weight:800;color:var(--gold);margin-top:3px;" class="money">${state.settings.goldPricePerGramUSD?fmt(goldPricePerGramBase(24))+' '+state.settings.baseCurrency:'—'}</div>
+        <div style="font-size:10.5px;color:var(--ink-faint);margin-top:2px;">آخر تحديث: ${upd}</div>
+      </div>
+      <button class="icon-btn" style="width:40px;height:40px;" onclick="fetchGoldPrice(true)">🔄</button>
+    </div>`;
+  }
   if(state.assets.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الأسهم أو أي حاجة ليها قيمة'); return html; }
-  html += `<div class="stat-box" style="margin-top:14px;margin-bottom:4px;"><div class="sv" style="color:var(--gold);">${fmt(totalAssetsBase())}</div><div class="sl">إجمالي قيمة الأصول (${state.settings.baseCurrency})</div></div>`;
-  html += state.assets.map(a=>`
-    <div class="wallet-card" style="margin-top:10px;" onclick="openAssetForm('${a.id}')">
+  html += `<div class="stat-box" style="margin-top:14px;margin-bottom:4px;"><div class="sv money" style="color:var(--gold);">${fmt(totalAssetsBase())}</div><div class="sl">إجمالي قيمة الأصول (${state.settings.baseCurrency})</div></div>`;
+  html += state.assets.map(a=>{
+    const val = assetValueOf(a);
+    const curLabel = a.isGold ? state.settings.baseCurrency : a.currency;
+    const subLabel = a.isGold ? `عيار ${a.karat} · ${a.gramWeight} جم` : (a.type||'أصل');
+    return `<div class="wallet-card" style="margin-top:10px;" onclick="openAssetForm('${a.id}')">
       <div class="wc-icon-lg" style="background:var(--gold)22;color:var(--gold);">${a.icon}</div>
-      <div class="wc-info"><div class="wc-name-lg">${esc(a.name)}</div><div class="wc-cur">${a.type||'أصل'}</div></div>
-      <div><div class="wc-bal-lg money">${fmt(a.value)}</div><div class="wc-bal-base money">${a.currency}</div></div>
-    </div>`).join('');
-  html += `<div style="font-size:11px;color:var(--ink-faint);margin-top:12px;padding:0 4px;">القيمة بتتحدث يدوي منك (مفيش سعر لحظي للدهب أو الأسهم). حدّثها من وقت للتاني عشان صافي ثروتك يفضل دقيق.</div>`;
+      <div class="wc-info"><div class="wc-name-lg">${esc(a.name)}</div><div class="wc-cur">${subLabel}</div></div>
+      <div><div class="wc-bal-lg money">${fmt(val)}</div><div class="wc-bal-base money">${curLabel}</div></div>
+    </div>`;
+  }).join('');
+  html += `<div style="font-size:11px;color:var(--ink-faint);margin-top:12px;padding:0 4px;">قيمة الدهب بتتحسب تلقائي من سعر السوق العالمي (Spot) — سعر تقريبي بدون مصنعية أو خصومات المحلات. باقي الأصول (زي الأسهم) بتحدّث قيمتها يدوي.</div>`;
   return html;
 }
 function openAssetForm(id){
   const ex = id ? state.assets.find(a=>a.id===id) : null;
+  const isGold = ex ? ex.isGold : false;
   openModal(`
     <div class="sheet-handle"></div>
     <div class="sheet-title">${ex?'تعديل الأصل':'أصل جديد'}</div>
-    <div class="field"><label>اسم الأصل</label><input id="assetName" value="${ex?esc(ex.name):''}" placeholder="مثال: دهب 21، أسهم فودافون"></div>
-    <div class="field"><label>النوع (اختياري)</label><input id="assetType" value="${ex&&ex.type?esc(ex.type):''}" placeholder="مثال: معدن، أسهم، عقار"></div>
-    <div class="row2">
-      <div class="field"><label>القيمة الحالية</label><input id="assetValue" type="text" inputmode="decimal" value="${ex?ex.value:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
-      <div class="field"><label>العملة</label>
-        <select id="assetCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
-      </div>
+    <div class="type-toggle" id="assetKind">
+      <button type="button" class="${!isGold?'active':''}" data-t="manual" onclick="toggleType(this,'assetKind');switchAssetKind('manual')">قيمة يدوية</button>
+      <button type="button" class="${isGold?'active':''}" data-t="gold" onclick="toggleType(this,'assetKind');switchAssetKind('gold')">دهب بالعيار 🥇</button>
     </div>
+    <div class="field"><label>اسم الأصل</label><input id="assetName" value="${ex?esc(ex.name):''}" placeholder="مثال: دهب أمي، أسهم فودافون"></div>
+    <div id="assetKindFields">${assetKindFieldsHTML(isGold?'gold':'manual', ex)}</div>
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="assetIconGrid">${ASSET_ICONS.map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':(!ex&&ic===ASSET_ICONS[0]?'sel':'')}" data-i="${ic}" onclick="selectIcon2(this,'assetIconGrid')">${ic}</button>`).join('')}</div></div>
     <button class="btn-primary" onclick="saveAsset(${ex?`'${ex.id}'`:'null'})">حفظ</button>
     ${ex?`<button class="btn-danger-text" onclick="deleteAsset('${ex.id}')">حذف الأصل</button>`:''}
   `);
 }
+function assetKindFieldsHTML(kind, ex){
+  if(kind==='gold'){
+    if(!state.settings.goldPriceLastUpdated) fetchGoldPrice(false);
+    const karats = [24,22,21,18,14,9];
+    return `
+      <div class="row2">
+        <div class="field"><label>الوزن (جرام)</label><input id="assetGrams" type="text" inputmode="decimal" value="${ex&&ex.gramWeight?ex.gramWeight:''}" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateGoldPreview()"></div>
+        <div class="field"><label>العيار</label>
+          <select id="assetKarat" onchange="updateGoldPreview()">${karats.map(k=>`<option value="${k}" ${ex&&ex.karat===k?'selected':(!ex&&k===21?'selected':'')}>عيار ${k}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="field" style="text-align:center;background:var(--bg-elev-2);border-radius:12px;padding:12px;">
+        <div style="font-size:11px;color:var(--ink-faint);">القيمة المتوقعة</div>
+        <div id="goldPreviewValue" style="font-size:20px;font-weight:800;color:var(--gold);margin-top:3px;">—</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="field"><label>النوع (اختياري)</label><input id="assetType" value="${ex&&ex.type?esc(ex.type):''}" placeholder="مثال: أسهم، عقار، سيارة"></div>
+    <div class="row2">
+      <div class="field"><label>القيمة الحالية</label><input id="assetValue" type="text" inputmode="decimal" value="${ex&&!ex.isGold?ex.value:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+      <div class="field"><label>العملة</label>
+        <select id="assetCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
+      </div>
+    </div>
+  `;
+}
+function switchAssetKind(kind){
+  document.getElementById('assetKindFields').innerHTML = assetKindFieldsHTML(kind, null);
+  if(kind==='gold') setTimeout(updateGoldPreview, 50);
+}
+function updateGoldPreview(){
+  const grams = parseFloat(document.getElementById('assetGrams')?.value)||0;
+  const karat = parseInt(document.getElementById('assetKarat')?.value)||21;
+  const preview = document.getElementById('goldPreviewValue');
+  if(!preview) return;
+  if(!state.settings.goldPricePerGramUSD){ preview.textContent='بنجيب السعر...'; return; }
+  const value = goldPricePerGramBase(karat) * grams;
+  preview.textContent = grams>0 ? fmt(value)+' '+state.settings.baseCurrency : '—';
+}
 function saveAsset(id){
   const name = document.getElementById('assetName').value.trim();
-  const type = document.getElementById('assetType').value.trim();
-  const value = parseFloat(document.getElementById('assetValue').value);
-  const currency = document.getElementById('assetCurrency').value;
+  const kind = document.querySelector('#assetKind .active').dataset.t;
   const iconBtn = document.getElementById('assetIconGrid').querySelector('.sel');
   const icon = iconBtn?iconBtn.dataset.i:ASSET_ICONS[0];
   if(!name){ toast('اكتب اسم الأصل'); return; }
-  if(!value||value<=0){ toast('اكتب قيمة صحيحة'); return; }
-  if(id){ Object.assign(state.assets.find(a=>a.id===id), {name,type,value,currency,icon}); }
-  else { state.assets.push({id:uid(), name, type, value, currency, icon}); }
+  let obj;
+  if(kind==='gold'){
+    const gramWeight = parseFloat(document.getElementById('assetGrams').value);
+    const karat = parseInt(document.getElementById('assetKarat').value);
+    if(!gramWeight||gramWeight<=0){ toast('اكتب وزن صحيح بالجرام'); return; }
+    obj = {name, icon, isGold:true, gramWeight, karat, type:'دهب', currency:state.settings.baseCurrency, value:null};
+  } else {
+    const type = document.getElementById('assetType').value.trim();
+    const value = parseFloat(document.getElementById('assetValue').value);
+    const currency = document.getElementById('assetCurrency').value;
+    if(!value||value<=0){ toast('اكتب قيمة صحيحة'); return; }
+    obj = {name, icon, isGold:false, type, value, currency, gramWeight:null, karat:null};
+  }
+  if(id){ Object.assign(state.assets.find(a=>a.id===id), obj); }
+  else { state.assets.push({id:uid(), ...obj}); }
   save(); closeModal(); renderAll(); toast('اتحفظ الأصل');
 }
 function deleteAsset(id){ state.assets=state.assets.filter(a=>a.id!==id); save(); closeModal(); renderAll(); toast('اتمسح'); }
@@ -2362,7 +2479,7 @@ function openAddCurrencyForm(){
 }
 function fmtDateTime(iso){
   const d = new Date(iso);
-  return fmtDate(d.toISOString().slice(0,10)) + ' - ' + d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  return fmtDate(localDateStr(d)) + ' - ' + d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
 }
 
 /* ---- Security ---- */
@@ -2552,7 +2669,7 @@ function exportBackup(){
   const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'sam-finance-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.href = url; a.download = 'sam-finance-backup-'+todayStr()+'.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   toast('اتصدرت النسخة الاحتياطية');
 }
@@ -2568,7 +2685,7 @@ function exportCSV(){
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'sam-finance-transactions-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href = url; a.download = 'sam-finance-transactions-'+todayStr()+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   toast('اتصدر ملف CSV');
 }
@@ -2625,7 +2742,7 @@ function openTemplateForm(id){
     <div class="field"><label>اسم القالب</label><input id="tplName" value="${ex?esc(ex.name):''}" placeholder="مثال: قهوة الصبح"></div>
     <div class="field"><label>المبلغ</label><input id="tplAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
     <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="tplWalletChips">${state.wallets.map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===state.wallets[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'tplWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="tplWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'tplWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
     <div class="field"><label>التصنيف</label>
       <div class="chip-select" id="tplCatChips">${state.categories.filter(c=>c.type===(ex?ex.type:'expense')).map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'tplCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
@@ -2659,7 +2776,7 @@ function applyTemplate(id){
   const tpl = state.templates.find(t=>t.id===id);
   if(!tpl) return;
   haptic(12);
-  state.transactions.push({id:uid(), type:tpl.type, walletId:tpl.walletId, categoryId:tpl.categoryId, amount:tpl.amount, note:tpl.name, date:new Date().toISOString().slice(0,10)});
+  state.transactions.push({id:uid(), type:tpl.type, walletId:tpl.walletId, categoryId:tpl.categoryId, amount:tpl.amount, note:tpl.name, date:todayStr()});
   save(); renderAll(); toast('اتسجلت: '+tpl.name+' ✓');
 }
 
@@ -2815,7 +2932,7 @@ function saveWallet(id){
     state.wallets.push(w);
     const opening = parseFloat(document.getElementById('wOpening')?.value);
     if(opening){
-      state.transactions.push({id:uid(),type:'income',walletId:w.id,categoryId:'cat_other_i',amount:opening,note:'رصيد افتتاحي',date:new Date().toISOString().slice(0,10)});
+      state.transactions.push({id:uid(),type:'income',walletId:w.id,categoryId:'cat_other_i',amount:opening,note:'رصيد افتتاحي',date:todayStr()});
     }
   }
   save(); closeModal(); renderAll(); toast('اتحفظت المحفظة');
@@ -2857,10 +2974,10 @@ function txFormBodyHTML(type, ex){
     return `
       <div class="row2">
         <div class="field"><label>من محفظة</label>
-          <select id="txFromWallet">${state.wallets.map(w=>`<option value="${w.id}" ${ex&&ex.walletId===w.id?'selected':''}>${w.icon} ${esc(w.name)} (${w.currency})</option>`).join('')}</select>
+          <select id="txFromWallet">${sortedWallets().map(w=>`<option value="${w.id}" ${ex&&ex.walletId===w.id?'selected':''}>${w.icon} ${esc(w.name)} (${w.currency})</option>`).join('')}</select>
         </div>
         <div class="field"><label>إلى محفظة</label>
-          <select id="txToWallet">${state.wallets.map(w=>`<option value="${w.id}" ${ex&&ex.toWalletId===w.id?'selected':(!ex&&state.wallets[1]&&w.id===state.wallets[1].id?'selected':'')}>${w.icon} ${esc(w.name)} (${w.currency})</option>`).join('')}</select>
+          <select id="txToWallet">${sortedWallets().map(w=>`<option value="${w.id}" ${ex&&ex.toWalletId===w.id?'selected':(!ex&&sortedWallets()[1]&&w.id===sortedWallets()[1].id?'selected':'')}>${w.icon} ${esc(w.name)} (${w.currency})</option>`).join('')}</select>
         </div>
       </div>
       <div class="row2">
@@ -2868,25 +2985,20 @@ function txFormBodyHTML(type, ex){
         <div class="field"><label>سعر الصرف</label><input id="txRate" type="number" inputmode="decimal" value="1" placeholder="1" oninput="recalcTransferReceived()"></div>
       </div>
       <div class="field"><label>المبلغ المستلم (بيتحسب تلقائي، تقدر تعدله)</label><input id="txToAmount" type="number" inputmode="decimal" value="${ex?ex.toAmount:''}" placeholder="0.00"></div>
-      <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:todayStr()}"></div>
       <div class="field"><label>ملاحظة</label><input id="txNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="اختياري"></div>
     `;
   }
   const cats = state.categories.filter(c=>c.type===type);
   return `
-    <div class="field"><label>المبلغ</label>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input id="txAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00 (اكتب حساب زي 150+80)" style="font-size:22px;font-weight:800;text-align:center;flex:1;" onblur="evalCalcField(this)">
-        <button type="button" class="icon-btn" id="voiceInputBtn" style="width:46px;height:46px;font-size:19px;flex-shrink:0;" onclick="startVoiceInput()">🎙️</button>
-      </div>
-    </div>
+    <div class="field"><label>المبلغ</label><input id="txAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00 (اكتب حساب زي 150+80)" style="font-size:22px;font-weight:800;text-align:center;" onblur="evalCalcField(this)"></div>
     <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="txWalletChips">${state.wallets.map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===state.wallets[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'txWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="txWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'txWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
     <div class="field"><label>التصنيف</label>
       <div class="chip-select" id="txCatChips">${cats.map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'txCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
     </div>
-    <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:new Date().toISOString().slice(0,10)}"></div>
+    <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:todayStr()}"></div>
     <div class="field"><label>ملاحظة (اختياري)</label><input id="txNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="مثال: عشا مع الأصحاب"></div>
     <div class="field"><label>تاجز (اختياري، افصل بفاصلة)</label><input id="txTags" value="${ex&&ex.tags?ex.tags.join('، '):''}" placeholder="مثال: شغل، استرداد ضريبي"></div>
     <div class="field"><label>إيصال (اختياري)</label><input type="file" accept="image/*" id="txReceipt" onchange="previewReceipt(this)">
@@ -2961,32 +3073,6 @@ function openTxDetail(id){
   openModal(txFormHTML(t.type, t));
   bindTxTypeSwitch();
   if(t.type==='transfer'){ /* rate not stored separately, fine */ }
-}
-function startVoiceInput(){
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const micBtn = document.getElementById('voiceInputBtn');
-  if(!SR){ toast('التسجيل الصوتي مش متاح على المتصفح/الإصدار ده'); return; }
-  let recognition;
-  try{ recognition = new SR(); }catch(e){ toast('معرفناش نشغل الميكروفون'); return; }
-  recognition.lang = 'ar-EG';
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  if(micBtn){ micBtn.textContent='🔴'; micBtn.style.opacity='.7'; }
-  recognition.onresult = (e)=>{
-    const transcript = e.results[0][0].transcript;
-    const numMatch = transcript.match(/[\d.]+/);
-    if(numMatch){
-      const amountField = document.getElementById('txAmount');
-      if(amountField) amountField.value = numMatch[0];
-    }
-    const noteField = document.getElementById('txNote');
-    if(noteField && !noteField.value.trim()) noteField.value = transcript;
-    toast('اتسمعت: '+transcript);
-  };
-  recognition.onerror = ()=>{ toast('معرفناش نسمعك، جرب تاني أو اكتب يدوي'); };
-  recognition.onend = ()=>{ if(micBtn){ micBtn.textContent='🎙️'; micBtn.style.opacity=''; } };
-  try{ recognition.start(); }
-  catch(e){ toast('معرفناش نبدأ التسجيل'); if(micBtn){ micBtn.textContent='🎙️'; micBtn.style.opacity=''; } }
 }
 function deleteTx(id){
   const idx = state.transactions.findIndex(t=>t.id===id);
@@ -3067,6 +3153,7 @@ function init(){
   renderAll();
   requestAnimationFrame(()=>moveNavIndicator());
   if(state.settings.ratesAutoUpdate && !ratesFreshEnoughToSkip()){ fetchLiveRates(false); }
+  if(state.assets.some(a=>a.isGold) && !goldPriceFreshEnoughToSkip()){ fetchGoldPrice(false); }
   setupAutoLock();
   bindSwipeContainer('txList');
   checkStorageHealth();
