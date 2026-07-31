@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="SAM Finance">
 <meta name="mobile-web-app-capable" content="yes">
 <title>SAM Finance | مصاريفي</title>
@@ -641,6 +641,10 @@ function load(){
     {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
   ];
   requiredCats.forEach(rc=>{ if(!state.categories.find(c=>c.id===rc.id)) state.categories.push({...rc, parentId:null}); });
+  if(!state.settings.ratesInversionFixApplied){
+    state.settings.ratesInversionFixApplied = true;
+    state.settings.ratesLastUpdated = null; // forces an immediate correct re-fetch on next init
+  }
   state.debts.forEach(d=>{ if(d.paidAmount===undefined) d.paidAmount = 0; if(d.walletId===undefined) d.walletId = null; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
@@ -701,7 +705,10 @@ function fetchLiveRates(showToast){
       if(data && data.result==='success' && data.rates){
         Object.keys(state.settings.rates).forEach(c=>{
           if(c===state.settings.baseCurrency){ state.settings.rates[c]=1; return; }
-          if(data.rates[c]) state.settings.rates[c] = data.rates[c];
+          // The API returns "how many units of C equal 1 base currency unit"
+          // (e.g. 1 EGP = 0.0208 USD). Our internal format is the inverse:
+          // "how many base-currency units equal 1 unit of C" (1 USD = 48 EGP).
+          if(data.rates[c]) state.settings.rates[c] = 1 / data.rates[c];
         });
         state.settings.ratesLastUpdated = new Date().toISOString();
         save();
