@@ -766,6 +766,8 @@ function load(){
     {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
     {id:'cat_savings',name:'ادخار',icon:'🏁',type:'expense'},
     {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
+    {id:'cat_asset_buy',name:'شراء أصل',icon:'💎',type:'expense'},
+    {id:'cat_asset_sell',name:'بيع أصل',icon:'💎',type:'income'},
   ];
   requiredCats.forEach(rc=>{ if(!state.categories.find(c=>c.id===rc.id)) state.categories.push({...rc, parentId:null}); });
   if(!state.settings.ratesInversionFixApplied){
@@ -781,7 +783,21 @@ function load(){
   if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
   if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
   if(state.settings.goldPriceIsManual===undefined) state.settings.goldPriceIsManual = false;
-  state.assets.forEach(a=>{ if(a.isGold===undefined) a.isGold=false; if(a.gramWeight===undefined) a.gramWeight=null; if(a.karat===undefined) a.karat=null; });
+  state.assets.forEach(a=>{
+    if(a.isGold===undefined) a.isGold=false;
+    if(a.gramWeight===undefined) a.gramWeight=null;
+    if(a.karat===undefined) a.karat=null;
+    if(a.kind===undefined) a.kind = a.isGold ? 'gold' : 'manual';
+    if(a.sold===undefined) a.sold=false;
+    if(a.soldDate===undefined) a.soldDate=null;
+    if(a.salePrice===undefined) a.salePrice=null;
+    if(a.purchasePrice===undefined) a.purchasePrice=null;
+    if(a.purchaseDate===undefined) a.purchaseDate=null;
+    if(a.deviceType===undefined) a.deviceType=null;
+    if(a.condition===undefined) a.condition='new';
+    if(a.annualDepreciationRate===undefined) a.annualDepreciationRate=null;
+    if(a.manualOverrideValue===undefined) a.manualOverrideValue=null;
+  });
   state.wallets.forEach(w=>{ if(w.sharedWith===undefined) w.sharedWith = null; if(w.order===undefined) w.order = 0; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
@@ -935,10 +951,30 @@ function setGoldPriceManually(){
   renderAll();
   toast('اتحفظ سعر الدهب يدويًا ✓');
 }
+const DEVICE_TYPES = [
+  {id:'phone', label:'موبايل', icon:'📱', rate:35},
+  {id:'laptop', label:'لابتوب', icon:'💻', rate:25},
+  {id:'headphones', label:'سماعات', icon:'🎧', rate:20},
+  {id:'camera', label:'كاميرا', icon:'📷', rate:20},
+  {id:'tablet', label:'تابلت', icon:'📱', rate:30},
+  {id:'other', label:'جهاز تاني', icon:'🖥️', rate:20},
+];
+function deviceTypeById(id){ return DEVICE_TYPES.find(d=>d.id===id) || DEVICE_TYPES[DEVICE_TYPES.length-1]; }
+function electronicsCurrentValue(a){
+  if(a.manualOverrideValue!=null) return a.manualOverrideValue;
+  if(!a.purchasePrice || !a.purchaseDate) return 0;
+  const years = Math.max(0, (Date.now() - new Date(a.purchaseDate+'T00:00:00').getTime())/(365.25*24*3600*1000));
+  const rate = (a.annualDepreciationRate!=null ? a.annualDepreciationRate : (deviceTypeById(a.deviceType).rate)) / 100;
+  const value = a.purchasePrice * Math.pow(1-rate, years);
+  return Math.max(a.purchasePrice*0.05, value);
+}
 function assetValueOf(a){
-  if(a.isGold && a.gramWeight && a.karat){
+  if(a.sold) return 0;
+  if(a.kind==='gold' || a.isGold){
+    if(!a.gramWeight || !a.karat) return 0;
     return goldPricePerGramBase(a.karat) * a.gramWeight;
   }
+  if(a.kind==='electronics') return electronicsCurrentValue(a);
   return a.value||0;
 }
 
@@ -2716,11 +2752,14 @@ function deleteGoal(id){ state.goals=state.goals.filter(g=>g.id!==id); save(); c
 /* ---- Assets / Investments ---- */
 const ASSET_ICONS = ['💎','🥇','📈','🏠','🚗','💻','⌚','🎨'];
 function totalAssetsBase(){
-  return state.assets.reduce((s,a)=> s + (a.isGold ? assetValueOf(a) : toBase(a.value, a.currency)), 0);
+  return state.assets.filter(a=>!a.sold).reduce((s,a)=>{
+    if(a.kind==='gold'||a.isGold||a.kind==='electronics') return s + assetValueOf(a);
+    return s + toBase(a.value, a.currency);
+  }, 0);
 }
 function assetsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openAssetForm()">+ أصل جديد</button>`;
-  const hasGold = state.assets.some(a=>a.isGold);
+  const hasGold = state.assets.some(a=>(a.kind==='gold'||a.isGold)&&!a.sold);
   if(hasGold){
     const upd = state.settings.goldPriceLastUpdated ? fmtDateTime(state.settings.goldPriceLastUpdated) : 'لسه ما اتحدثش';
     const tag = state.settings.goldPriceLastUpdated ? (state.settings.goldPriceIsManual?' · يدوي':' · تلقائي') : '';
@@ -2736,35 +2775,69 @@ function assetsPanelHTML(){
       <button class="btn-secondary" style="margin-top:10px;" onclick="setGoldPriceManually()">✏️ دخّل السعر بنفسك</button>
     </div>`;
   }
-  if(state.assets.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الأسهم أو أي حاجة ليها قيمة'); return html; }
+  const active = state.assets.filter(a=>!a.sold);
+  const sold = state.assets.filter(a=>a.sold);
+  if(active.length===0 && sold.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الموبايل أو اللاب توب أو أي حاجة ليها قيمة'); return html; }
   html += `<div class="stat-box" style="margin-top:14px;margin-bottom:4px;"><div class="sv money" style="color:var(--gold);">${fmt(totalAssetsBase())}</div><div class="sl">إجمالي قيمة الأصول (${state.settings.baseCurrency})</div></div>`;
-  html += state.assets.map(a=>{
+  html += active.map(a=>{
     const val = assetValueOf(a);
-    const curLabel = a.isGold ? state.settings.baseCurrency : a.currency;
-    const subLabel = a.isGold ? `عيار ${a.karat} · ${a.gramWeight} جم` : (a.type||'أصل');
-    return `<div class="wallet-card" style="margin-top:10px;" onclick="openAssetForm('${a.id}')">
-      <div class="wc-icon-lg" style="background:var(--gold)22;color:var(--gold);">${a.icon}</div>
-      <div class="wc-info"><div class="wc-name-lg">${esc(a.name)}</div><div class="wc-cur">${subLabel}</div></div>
-      <div><div class="wc-bal-lg money">${fmt(val)}</div><div class="wc-bal-base money">${curLabel}</div></div>
+    let subLabel, curLabel;
+    if(a.kind==='gold'||a.isGold){ subLabel = `عيار ${a.karat} · ${a.gramWeight} جم`; curLabel = state.settings.baseCurrency; }
+    else if(a.kind==='electronics'){
+      const dt = deviceTypeById(a.deviceType);
+      const depreciated = a.purchasePrice ? Math.round((1 - val/a.purchasePrice)*100) : 0;
+      subLabel = `${dt.label} · ${a.condition==='used'?'مستعمل':'جديد'} · اهلاك ${depreciated}%`;
+      curLabel = state.settings.baseCurrency;
+    } else { subLabel = a.type||'أصل'; curLabel = a.currency; }
+    return `<div class="wallet-card" style="margin-top:10px;">
+      <div onclick="openAssetForm('${a.id}')" style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;">
+        <div class="wc-icon-lg" style="background:var(--gold)22;color:var(--gold);">${a.icon}</div>
+        <div class="wc-info"><div class="wc-name-lg">${esc(a.name)}</div><div class="wc-cur">${subLabel}</div></div>
+        <div><div class="wc-bal-lg money">${fmt(val)}</div><div class="wc-bal-base money">${curLabel}</div></div>
+      </div>
     </div>`;
   }).join('');
-  html += `<div style="font-size:11px;color:var(--ink-faint);margin-top:12px;padding:0 4px;">قيمة الدهب بتتحسب تلقائي من سعر السوق العالمي (Spot) — سعر تقريبي بدون مصنعية أو خصومات المحلات. باقي الأصول (زي الأسهم) بتحدّث قيمتها يدوي.</div>`;
+  if(sold.length>0){
+    html += `<div class="section-title">أصول اتباعت</div>`;
+    html += sold.map(a=>{
+      const basis = a.kind==='electronics' ? (a.purchasePrice||0) : (a.kind==='gold'||a.isGold ? 0 : (a.value||0));
+      const profit = (a.salePrice||0) - basis;
+      const color = profit>=0 ? 'var(--brand-2)' : 'var(--red)';
+      return `<div class="wallet-card" style="margin-top:10px;opacity:.75;">
+        <div style="display:flex;align-items:center;gap:13px;flex:1;min-width:0;">
+          <div class="wc-icon-lg" style="background:var(--bg-elev-2);color:var(--ink-faint);">${a.icon}</div>
+          <div class="wc-info"><div class="wc-name-lg">${esc(a.name)}</div><div class="wc-cur">اتباع ${fmtDate(a.soldDate)}</div></div>
+          <div><div class="wc-bal-lg money" style="color:${color};">${profit>=0?'+':''}${fmt(profit)}</div><div class="wc-bal-base">بيع بـ ${fmt(a.salePrice)}</div></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  html += `<div style="font-size:11px;color:var(--ink-faint);margin-top:12px;padding:0 4px;">قيمة الدهب من سعر السوق العالمي، والإلكترونيات بمعادلة اهلاك تقريبية حسب نوع الجهاز وعمره — كلهم تقديريين مش أسعار سوق حقيقية لحظية.</div>`;
   return html;
 }
 function openAssetForm(id){
   const ex = id ? state.assets.find(a=>a.id===id) : null;
-  const isGold = ex ? ex.isGold : false;
+  const kind = ex ? ex.kind : 'manual';
   openModal(`
     <div class="sheet-handle"></div>
     <div class="sheet-title">${ex?'تعديل الأصل':'أصل جديد'}</div>
-    <div class="type-toggle" id="assetKind">
-      <button type="button" class="${!isGold?'active':''}" data-t="manual" onclick="toggleType(this,'assetKind');switchAssetKind('manual')">قيمة يدوية</button>
-      <button type="button" class="${isGold?'active':''}" data-t="gold" onclick="toggleType(this,'assetKind');switchAssetKind('gold')">دهب بالعيار 🥇</button>
-    </div>
-    <div class="field"><label>اسم الأصل</label><input id="assetName" value="${ex?esc(ex.name):''}" placeholder="مثال: دهب أمي، أسهم فودافون"></div>
-    <div id="assetKindFields">${assetKindFieldsHTML(isGold?'gold':'manual', ex)}</div>
+    ${!ex?`<div class="type-toggle" id="assetKind" style="flex-wrap:wrap;">
+      <button type="button" class="${kind==='manual'?'active':''}" data-t="manual" onclick="toggleType(this,'assetKind');switchAssetKind('manual')">قيمة يدوية</button>
+      <button type="button" class="${kind==='gold'?'active':''}" data-t="gold" onclick="toggleType(this,'assetKind');switchAssetKind('gold')">دهب 🥇</button>
+      <button type="button" class="${kind==='electronics'?'active':''}" data-t="electronics" onclick="toggleType(this,'assetKind');switchAssetKind('electronics')">جهاز إلكتروني 📱</button>
+    </div>`:''}
+    <div class="field"><label>اسم الأصل</label><input id="assetName" value="${ex?esc(ex.name):''}" placeholder="مثال: آيفون 15، دهب أمي"></div>
+    <div id="assetKindFields">${assetKindFieldsHTML(kind, ex)}</div>
+    ${!ex?`<div class="field"><label>💳 اتخصمت منين؟</label>
+      <div class="chip-select" id="assetWalletChips">
+        ${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'assetWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}
+        <button type="button" data-w="" onclick="selectChip(this,'assetWalletChips')">بدون (مثلاً هدية)</button>
+      </div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">هيتسجل مبلغ الشراء كحركة صرف فعلية من المحفظة دي. اختار "بدون" لو الأصل مش اتشرى بفلوسك (زي هدية أو ميراث).</div>
+    </div>`:''}
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="assetIconGrid">${ASSET_ICONS.map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':(!ex&&ic===ASSET_ICONS[0]?'sel':'')}" data-i="${ic}" onclick="selectIcon2(this,'assetIconGrid')">${ic}</button>`).join('')}</div></div>
     <button class="btn-primary" onclick="saveAsset(${ex?`'${ex.id}'`:'null'})">حفظ</button>
+    ${ex&&!ex.sold?`<button class="btn-secondary" onclick="openSellAssetForm('${ex.id}')">💰 بيع الأصل</button>`:''}
     ${ex?`<button class="btn-danger-text" onclick="deleteAsset('${ex.id}')">حذف الأصل</button>`:''}
   `);
 }
@@ -2786,10 +2859,32 @@ function assetKindFieldsHTML(kind, ex){
       </div>
     `;
   }
+  if(kind==='electronics'){
+    const dt = ex ? deviceTypeById(ex.deviceType) : DEVICE_TYPES[0];
+    return `
+      <div class="field"><label>نوع الجهاز</label>
+        <div class="chip-select" id="assetDeviceChips">${DEVICE_TYPES.map(d=>`<button type="button" class="${(ex?ex.deviceType===d.id:d.id===DEVICE_TYPES[0].id)?'sel':''}" data-id="${d.id}" data-rate="${d.rate}" onclick="selectChip(this,'assetDeviceChips');onDeviceTypeChange();">${d.icon} ${d.label}</button>`).join('')}</div>
+      </div>
+      <div class="type-toggle" id="assetCondition">
+        <button type="button" class="${(!ex||ex.condition==='new')?'active':''}" data-t="new" onclick="toggleType(this,'assetCondition')">جديد</button>
+        <button type="button" class="${ex&&ex.condition==='used'?'active':''}" data-t="used" onclick="toggleType(this,'assetCondition')">مستعمل</button>
+      </div>
+      <div class="row2">
+        <div class="field"><label>سعر الشراء</label><input id="assetPurchasePrice" type="text" inputmode="decimal" value="${ex?ex.purchasePrice:''}" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateElectronicsPreview()" ${ex?'disabled':''}></div>
+        <div class="field"><label>تاريخ الشراء</label><input id="assetPurchaseDate" type="date" value="${ex?ex.purchaseDate:todayStr()}" oninput="updateElectronicsPreview()" ${ex?'disabled':''}></div>
+      </div>
+      <div class="field"><label>معدل الاهلاك السنوي % (تقدر تعدله)</label><input id="assetDeprRate" type="number" min="0" max="90" value="${ex&&ex.annualDepreciationRate!=null?ex.annualDepreciationRate:dt.rate}" oninput="updateElectronicsPreview()"></div>
+      <div class="field" style="text-align:center;background:var(--bg-elev-2);border-radius:12px;padding:12px;">
+        <div style="font-size:11px;color:var(--ink-faint);">القيمة الحالية المتوقعة</div>
+        <div id="electronicsPreviewValue" style="font-size:20px;font-weight:800;color:var(--gold);margin-top:3px;">—</div>
+        <div style="font-size:11px;color:var(--brand-2);font-weight:700;margin-top:8px;cursor:pointer;" onclick="setElectronicsPriceManually('${ex?ex.id:''}')">مش دقيق؟ دخّل السعر بنفسك</div>
+      </div>
+    `;
+  }
   return `
     <div class="field"><label>النوع (اختياري)</label><input id="assetType" value="${ex&&ex.type?esc(ex.type):''}" placeholder="مثال: أسهم، عقار، سيارة"></div>
     <div class="row2">
-      <div class="field"><label>القيمة الحالية</label><input id="assetValue" type="text" inputmode="decimal" value="${ex&&!ex.isGold?ex.value:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+      <div class="field"><label>القيمة الحالية</label><input id="assetValue" type="text" inputmode="decimal" value="${ex&&ex.kind==='manual'?ex.value:''}" placeholder="0.00" onblur="evalCalcField(this)"></div>
       <div class="field"><label>العملة</label>
         <select id="assetCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
       </div>
@@ -2799,6 +2894,12 @@ function assetKindFieldsHTML(kind, ex){
 function switchAssetKind(kind){
   document.getElementById('assetKindFields').innerHTML = assetKindFieldsHTML(kind, null);
   if(kind==='gold') setTimeout(updateGoldPreview, 50);
+  if(kind==='electronics') setTimeout(updateElectronicsPreview, 50);
+}
+function onDeviceTypeChange(){
+  const sel = document.querySelector('#assetDeviceChips .sel');
+  if(sel){ document.getElementById('assetDeprRate').value = sel.dataset.rate; }
+  updateElectronicsPreview();
 }
 function updateGoldPreview(){
   const grams = parseFloat(document.getElementById('assetGrams')?.value)||0;
@@ -2809,28 +2910,132 @@ function updateGoldPreview(){
   const value = goldPricePerGramBase(karat) * grams;
   preview.textContent = grams>0 ? fmt(value)+' '+state.settings.baseCurrency : '—';
 }
+function updateElectronicsPreview(){
+  const price = parseFloat(document.getElementById('assetPurchasePrice')?.value)||0;
+  const date = document.getElementById('assetPurchaseDate')?.value;
+  const rate = parseFloat(document.getElementById('assetDeprRate')?.value);
+  const preview = document.getElementById('electronicsPreviewValue');
+  if(!preview) return;
+  if(price<=0 || !date){ preview.textContent='—'; return; }
+  const value = electronicsCurrentValue({purchasePrice:price, purchaseDate:date, annualDepreciationRate:rate, manualOverrideValue:null});
+  preview.textContent = fmt(value)+' '+state.settings.baseCurrency;
+}
+function setElectronicsPriceManually(id){
+  const current = id ? assetValueOf(state.assets.find(a=>a.id===id)) : (parseFloat(document.getElementById('electronicsPreviewValue')?.textContent)||'');
+  const input = prompt('القيمة الحالية للجهاز دلوقتي بالـ '+state.settings.baseCurrency, Math.round(current)||'');
+  if(input===null) return;
+  const val = parseFloat(input);
+  if(!val||val<=0){ toast('اكتب رقم صحيح'); return; }
+  if(id){
+    const a = state.assets.find(x=>x.id===id);
+    a.manualOverrideValue = val;
+    save(); closeModal(); renderAll(); toast('اتحفظت القيمة اليدوية');
+  } else {
+    window._pendingManualElectronicsValue = val;
+    const preview = document.getElementById('electronicsPreviewValue');
+    if(preview) preview.textContent = fmt(val)+' '+state.settings.baseCurrency+' (يدوي)';
+    toast('هيتحفظ لما تدوس حفظ');
+  }
+}
 function saveAsset(id){
   const name = document.getElementById('assetName').value.trim();
-  const kind = document.querySelector('#assetKind .active').dataset.t;
+  if(!name){ toast('اكتب اسم الأصل'); return; }
   const iconBtn = document.getElementById('assetIconGrid').querySelector('.sel');
   const icon = iconBtn?iconBtn.dataset.i:ASSET_ICONS[0];
-  if(!name){ toast('اكتب اسم الأصل'); return; }
-  let obj;
+  if(id){
+    const ex = state.assets.find(a=>a.id===id);
+    ex.name = name; ex.icon = icon;
+    if(ex.kind==='electronics'){
+      const rate = parseFloat(document.getElementById('assetDeprRate')?.value);
+      if(!isNaN(rate)) ex.annualDepreciationRate = rate;
+    } else if(ex.kind==='manual'){
+      const type = document.getElementById('assetType')?.value.trim();
+      const value = parseFloat(document.getElementById('assetValue')?.value);
+      if(type!==undefined) ex.type = type;
+      if(value>0) ex.value = value;
+    }
+    save(); closeModal(); renderAll(); toast('اتحفظ التعديل');
+    return;
+  }
+  const kind = document.querySelector('#assetKind .active').dataset.t;
+  let obj = null, purchasePrice = 0;
   if(kind==='gold'){
     const gramWeight = parseFloat(document.getElementById('assetGrams').value);
     const karat = parseInt(document.getElementById('assetKarat').value);
     if(!gramWeight||gramWeight<=0){ toast('اكتب وزن صحيح بالجرام'); return; }
-    obj = {name, icon, isGold:true, gramWeight, karat, type:'دهب', currency:state.settings.baseCurrency, value:null};
+    obj = {name, icon, kind:'gold', isGold:true, gramWeight, karat, type:'دهب', currency:state.settings.baseCurrency, value:null};
+    purchasePrice = goldPricePerGramBase(karat)*gramWeight;
+  } else if(kind==='electronics'){
+    const deviceBtn = document.getElementById('assetDeviceChips').querySelector('.sel');
+    const deviceType = deviceBtn ? deviceBtn.dataset.id : 'other';
+    const condition = document.querySelector('#assetCondition .active').dataset.t;
+    const price = parseFloat(document.getElementById('assetPurchasePrice').value);
+    const date = document.getElementById('assetPurchaseDate').value;
+    const rate = parseFloat(document.getElementById('assetDeprRate').value)||deviceTypeById(deviceType).rate;
+    if(!price||price<=0){ toast('اكتب سعر شراء صحيح'); return; }
+    if(!date){ toast('اختار تاريخ الشراء'); return; }
+    obj = {name, icon, kind:'electronics', isGold:false, deviceType, condition, purchasePrice:price, purchaseDate:date, annualDepreciationRate:rate, manualOverrideValue: window._pendingManualElectronicsValue||null, currency:state.settings.baseCurrency};
+    purchasePrice = price;
+    window._pendingManualElectronicsValue = null;
   } else {
     const type = document.getElementById('assetType').value.trim();
     const value = parseFloat(document.getElementById('assetValue').value);
     const currency = document.getElementById('assetCurrency').value;
     if(!value||value<=0){ toast('اكتب قيمة صحيحة'); return; }
-    obj = {name, icon, isGold:false, type, value, currency, gramWeight:null, karat:null};
+    obj = {name, icon, kind:'manual', isGold:false, type, value, currency, gramWeight:null, karat:null};
+    purchasePrice = toBase(value, currency);
   }
-  if(id){ Object.assign(state.assets.find(a=>a.id===id), obj); }
-  else { state.assets.push({id:uid(), ...obj}); }
+  const newAsset = {id:uid(), sold:false, ...obj};
+  state.assets.push(newAsset);
+  const walletChip = document.getElementById('assetWalletChips')?.querySelector('.sel');
+  const walletId = walletChip && walletChip.dataset.w ? walletChip.dataset.w : null;
+  if(walletId && purchasePrice>0){
+    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_asset_buy', amount: kind==='manual'?parseFloat(document.getElementById('assetValue').value):purchasePrice, note:'شراء: '+name, date:todayStr(), assetId:newAsset.id});
+  }
   save(); closeModal(); renderAll(); toast('اتحفظ الأصل');
+}
+function openSellAssetForm(id){
+  const a = state.assets.find(x=>x.id===id);
+  if(!a) return;
+  const currentVal = assetValueOf(a);
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">بيع: ${esc(a.name)}</div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">القيمة المتوقعة دلوقتي: <span class="money">${fmt(currentVal)} ${state.settings.baseCurrency}</span></div>
+    <div class="field"><label>سعر البيع الفعلي</label><input id="sellPrice" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateSellPreview('${id}')"></div>
+    <div class="field"><label>المحفظة اللي هتستلم فيها الفلوس</label>
+      <div class="chip-select" id="sellWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'sellWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+    </div>
+    <div id="sellPreviewResult" style="margin-top:10px;"></div>
+    <button class="btn-primary" onclick="confirmSellAsset('${id}')">تأكيد البيع</button>
+  `);
+}
+function updateSellPreview(id){
+  const a = state.assets.find(x=>x.id===id);
+  const price = parseFloat(document.getElementById('sellPrice')?.value)||0;
+  const wrap = document.getElementById('sellPreviewResult');
+  if(!wrap || price<=0) { if(wrap) wrap.innerHTML=''; return; }
+  const basis = a.kind==='electronics' ? a.purchasePrice : (a.kind==='gold'||a.isGold ? assetValueOf(a) : a.value);
+  const currentVal = assetValueOf(a);
+  const profitVsPurchase = price - (basis||0);
+  const profitVsExpected = price - currentVal;
+  const color1 = profitVsPurchase>=0?'var(--brand-2)':'var(--red)';
+  wrap.innerHTML = `
+    <div class="card">
+      <div class="bm-top"><span>مقارنة بسعر الشراء</span><span class="money" style="color:${color1};font-weight:800;">${profitVsPurchase>=0?'+':''}${fmt(profitVsPurchase)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>مقارنة بالقيمة المتوقعة دلوقتي</span><span class="money" style="color:${profitVsExpected>=0?'var(--brand-2)':'var(--red)'};font-weight:800;">${profitVsExpected>=0?'+':''}${fmt(profitVsExpected)}</span></div>
+    </div>`;
+}
+function confirmSellAsset(id){
+  const a = state.assets.find(x=>x.id===id);
+  if(!a) return;
+  const price = parseFloat(document.getElementById('sellPrice').value);
+  const wSel = document.getElementById('sellWalletChips').querySelector('.sel');
+  if(!price||price<=0){ toast('اكتب سعر بيع صحيح'); return; }
+  if(!wSel){ toast('اختار محفظة'); return; }
+  state.transactions.push({id:uid(), type:'income', walletId:wSel.dataset.w, categoryId:'cat_asset_sell', amount:price, note:'بيع: '+a.name, date:todayStr(), assetId:a.id});
+  a.sold = true; a.soldDate = todayStr(); a.salePrice = price;
+  save(); closeModal(); renderAll(); toast('اتسجل البيع ✓');
 }
 function deleteAsset(id){ state.assets=state.assets.filter(a=>a.id!==id); save(); closeModal(); renderAll(); toast('اتمسح'); }
 
