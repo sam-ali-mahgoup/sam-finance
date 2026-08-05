@@ -793,7 +793,9 @@ function load(){
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
   if(state.settings.fontScale===undefined) state.settings.fontScale = 'medium';
-  if(!state.settings.customColors) state.settings.customColors = {};
+  if(!state.settings.customColors || !state.settings.customColors.dark || !state.settings.customColors.light){
+    state.settings.customColors = {dark:{}, light:{}};
+  }
   if(state.settings.showDecimals===undefined) state.settings.showDecimals = true;
   if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
   if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
@@ -4628,12 +4630,14 @@ const COLOR_ROLES = [
 const ACCENT_DRIVEN_KEYS = ['brand','brand-2','gold','red','blue'];
 function applyAccentTheme(){
   const t = ACCENT_THEMES[state.settings.accentTheme] || ACCENT_THEMES.green;
-  const variant = state.settings.theme==='light' ? t.light : t.dark;
-  if(!state.settings.customColors) state.settings.customColors = {};
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  const variant = t[mode];
+  if(!state.settings.customColors || !state.settings.customColors.dark) state.settings.customColors = {dark:{}, light:{}};
+  const modeColors = state.settings.customColors[mode] || {};
   const accentDefaults = {brand:variant.brand, 'brand-2':variant.brand2, gold:variant.gold, red:variant.red, blue:variant.blue};
   [document.documentElement, document.body].forEach(el=>{
     COLOR_ROLES.forEach(r=>{
-      const custom = state.settings.customColors[r.key];
+      const custom = modeColors[r.key];
       if(custom){ el.style.setProperty('--'+r.key, custom); }
       else if(ACCENT_DRIVEN_KEYS.includes(r.key)){ el.style.setProperty('--'+r.key, accentDefaults[r.key]); }
       else { el.style.removeProperty('--'+r.key); } // fall back to the plain CSS theme default
@@ -4641,20 +4645,24 @@ function applyAccentTheme(){
   });
 }
 function setCustomColor(role, hex){
-  if(!state.settings.customColors) state.settings.customColors = {};
-  state.settings.customColors[role] = hex;
+  if(!state.settings.customColors || !state.settings.customColors.dark) state.settings.customColors = {dark:{}, light:{}};
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  state.settings.customColors[mode][role] = hex;
   save(); applyAccentTheme(); openPanel('customcolors');
 }
 function resetCustomColor(role){
-  if(state.settings.customColors) delete state.settings.customColors[role];
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  if(state.settings.customColors && state.settings.customColors[mode]) delete state.settings.customColors[mode][role];
   save(); applyAccentTheme(); openPanel('customcolors');
 }
 function resetAllCustomColors(){
-  state.settings.customColors = {};
-  save(); applyAccentTheme(); openPanel('customcolors'); toast('اترجعت كل الألوان الافتراضية');
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  state.settings.customColors[mode] = {};
+  save(); applyAccentTheme(); openPanel('customcolors'); toast('اترجعت ألوان الوضع '+(mode==='light'?'الفاتح':'الغامق')+' الافتراضية');
 }
 function getEffectiveColorHex(key){
-  const custom = state.settings.customColors && state.settings.customColors[key];
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  const custom = state.settings.customColors && state.settings.customColors[mode] && state.settings.customColors[mode][key];
   if(custom) return custom;
   const raw = getComputedStyle(document.documentElement).getPropertyValue('--'+key).trim();
   if(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i.test(raw)) return raw;
@@ -4670,13 +4678,22 @@ function getEffectiveColorHex(key){
 function customColorsPanelHTML(){
   const groups = {};
   COLOR_ROLES.forEach(r=>{ if(!groups[r.group]) groups[r.group]=[]; groups[r.group].push(r); });
+  const mode = state.settings.theme==='light' ? 'light' : 'dark';
+  const modeColors = (state.settings.customColors && state.settings.customColors[mode]) || {};
   return `
-    <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:14px;padding:0 4px;">أي لون هنا — ولا واحد مستثنى. عدّله براحتك وهيفضل ثابت حتى لو غيّرت الثيم أو الوضع الفاتح/الغامق، لحد ما تستعيده بنفسك.</div>
+    <div class="card" style="margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:22px;">${mode==='light'?'☀️':'🌙'}</div>
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:13px;">بتعدّل ألوان الوضع ${mode==='light'?'الفاتح':'الغامق'}</div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">كل وضع له ألوانه المستقلة — بدّل الوضع من هنا عشان تعدّل الوضع التاني</div>
+      </div>
+      <button class="btn-secondary" style="margin-top:0;flex-shrink:0;" onclick="toggleTheme();openPanel('customcolors');">بدّل</button>
+    </div>
     ${Object.entries(groups).map(([groupName, roles])=>`
       <div class="section-title" style="margin-top:14px;">${groupName}</div>
       <div class="card">
         ${roles.map(r=>{
-          const custom = state.settings.customColors && state.settings.customColors[r.key];
+          const custom = modeColors[r.key];
           const current = getEffectiveColorHex(r.key);
           return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
             <input type="color" value="${current}" onchange="setCustomColor('${r.key}',this.value)" style="width:44px;height:44px;border-radius:10px;border:none;padding:0;background:none;flex-shrink:0;">
@@ -4686,7 +4703,7 @@ function customColorsPanelHTML(){
         }).join('')}
       </div>
     `).join('')}
-    <button class="btn-secondary" style="margin-top:14px;" onclick="resetAllCustomColors()">استعادة كل الألوان الافتراضية</button>
+    <button class="btn-secondary" style="margin-top:14px;" onclick="resetAllCustomColors()">استعادة ألوان الوضع ${mode==='light'?'الفاتح':'الغامق'} الافتراضية</button>
   `;
 }
 const FONT_SCALES = {small:0.9, medium:1, large:1.15};
