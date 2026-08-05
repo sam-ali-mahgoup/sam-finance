@@ -79,7 +79,7 @@ body{
 /* ---------- SPLASH ---------- */
 #splash{
   position:fixed;inset:0;z-index:1000;
-  background:linear-gradient(160deg,#173C34,#0E1613 80%);
+  background:linear-gradient(160deg, color-mix(in srgb, var(--brand) 55%, #0E1613), #0E1613 80%);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
   transition:opacity .5s ease, visibility .5s;
 }
@@ -179,17 +179,17 @@ button{cursor:pointer;border:none;background:none;}
 
 /* ---------- DASHBOARD ---------- */
 .hero-card{
-  background:linear-gradient(150deg,#173C34,#0E1613 75%);
+  background:linear-gradient(150deg, color-mix(in srgb, var(--brand) 55%, #0E1613), #0E1613 75%);
   border:1px solid var(--border);
   border-radius:22px;padding:22px 20px;margin-top:8px;position:relative;overflow:hidden;
 }
-[data-theme="light"] .hero-card{background:linear-gradient(150deg,#1F8A70,#146356 80%);}
-.hero-card::after{content:'';position:absolute;left:-40px;top:-60px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(79,209,165,.18),transparent 70%);}
+[data-theme="light"] .hero-card{background:linear-gradient(150deg, var(--brand), color-mix(in srgb, var(--brand) 70%, black) 80%);}
+.hero-card::after{content:'';position:absolute;left:-40px;top:-60px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle, color-mix(in srgb, var(--brand-2) 45%, transparent), transparent 70%);}
 .hero-label{color:#B9D8CD;font-size:12.5px;font-weight:600;}
 .hero-amount{font-size:36px;font-weight:800;color:#fff;margin:6px 0 2px;direction:ltr;text-align:right;letter-spacing:.3px;}
 .hero-amount span{font-size:16px;opacity:.7;font-weight:600;margin-right:6px;}
 .hero-sub{display:flex;gap:16px;margin-top:16px;}
-.streak-pill{margin-top:12px;background:rgba(255,255,255,.08);border-radius:11px;padding:8px 12px;font-size:12px;font-weight:800;color:#FFD27A;text-align:center;}
+.streak-pill{margin-top:12px;background:rgba(255,255,255,.08);border-radius:11px;padding:8px 12px;font-size:12px;font-weight:800;color:var(--gold);text-align:center;}
 .networth-line{margin-top:8px;font-size:11.5px;font-weight:700;color:#C9DED6;text-align:right;cursor:pointer;}
 @keyframes confettiFall{
   0%{transform:translateY(0) rotate(0deg);opacity:1;}
@@ -793,6 +793,7 @@ function load(){
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
   if(state.settings.fontScale===undefined) state.settings.fontScale = 'medium';
+  if(!state.settings.customColors) state.settings.customColors = {};
   if(state.settings.showDecimals===undefined) state.settings.showDecimals = true;
   if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
   if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
@@ -2551,7 +2552,7 @@ function openPanel(name){
   currentPanel = name;
   document.getElementById('morePanel-menu').style.display='none';
   document.getElementById('morePanel-sub').style.display='block';
-  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',assets:'الأصول والاستثمارات',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',appearance:'المظهر',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20',annual:'التقرير السنوي',splitbill:'تقسيم الفاتورة',badges:'الإنجازات',whatif:'لو هصرف كام؟',installments:'الأقساط',calendar:'التقويم المالي',merchants:'الأماكن',zakat:'حاسبة الزكاة'};
+  const titles = {budgets:'الميزانية الشهرية',recurring:'الحركات المتكررة',debts:'الديون والقروض',goals:'أهداف الادخار',assets:'الأصول والاستثمارات',categories:'التصنيفات',currencies:'العملات وأسعار الصرف',appearance:'المظهر',security:'الأمان',backup:'النسخ الاحتياطي',about:'عن التطبيق',templates:'القوالب السريعة',calc503020:'حاسبة 50/30/20',annual:'التقرير السنوي',splitbill:'تقسيم الفاتورة',badges:'الإنجازات',whatif:'لو هصرف كام؟',installments:'الأقساط',calendar:'التقويم المالي',merchants:'الأماكن',zakat:'حاسبة الزكاة',customcolors:'تخصيص الألوان'};
   document.getElementById('panelTitle').textContent = titles[name]||'';
   renderPanel();
 }
@@ -2583,6 +2584,7 @@ function renderPanel(){
   else if(currentPanel==='calendar') body.innerHTML = calendarPanelHTML();
   else if(currentPanel==='merchants') body.innerHTML = merchantsPanelHTML();
   else if(currentPanel==='zakat') body.innerHTML = zakatPanelHTML();
+  else if(currentPanel==='customcolors') body.innerHTML = customColorsPanelHTML();
 }
 
 /* ---- Budgets ---- */
@@ -4581,22 +4583,111 @@ function toggleTheme(){
 }
 
 const ACCENT_THEMES = {
-  green:  {label:'أخضر (افتراضي)', dark:{brand:'#1F8A70', brand2:'#4FD1A5'}, light:{brand:'#1F8A70', brand2:'#17705A'}},
-  blue:   {label:'أزرق',            dark:{brand:'#2F6FA6', brand2:'#5AA9E6'}, light:{brand:'#2F6FA6', brand2:'#1F4F7A'}},
-  purple: {label:'بنفسجي',          dark:{brand:'#6B4FA0', brand2:'#9C7FD1'}, light:{brand:'#6B4FA0', brand2:'#523A7A'}},
-  coral:  {label:'كورال',           dark:{brand:'#C24734', brand2:'#E8836A'}, light:{brand:'#C24734', brand2:'#9C3A29'}},
-  gold:   {label:'ذهبي',            dark:{brand:'#B9853A', brand2:'#D9BE8E'}, light:{brand:'#B9853A', brand2:'#8F6A2E'}},
-  teal:   {label:'تركواز',          dark:{brand:'#1F8A93', brand2:'#4FD1D6'}, light:{brand:'#1F8A93', brand2:'#166970'}},
-  rose:   {label:'وردي',            dark:{brand:'#B03A66', brand2:'#E87FA8'}, light:{brand:'#B03A66', brand2:'#872C4E'}},
-  slate:  {label:'رمادي داكن',      dark:{brand:'#4A5A6A', brand2:'#8FA3B5'}, light:{brand:'#4A5A6A', brand2:'#37444F'}},
+  green:  {label:'أخضر (افتراضي)',
+    dark:{brand:'#1F8A70',brand2:'#4FD1A5',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#1F8A70',brand2:'#17705A',gold:'#B9853A',red:'#C24734',blue:'#3E6E99'}},
+  blue:   {label:'أزرق',
+    dark:{brand:'#2F6FA6',brand2:'#5AA9E6',gold:'#D4A054',red:'#E2604F',blue:'#8FD1FF'},
+    light:{brand:'#2F6FA6',brand2:'#1F4F7A',gold:'#B9853A',red:'#C24734',blue:'#5A8FBF'}},
+  purple: {label:'بنفسجي',
+    dark:{brand:'#6B4FA0',brand2:'#9C7FD1',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#6B4FA0',brand2:'#523A7A',gold:'#B9853A',red:'#C24734',blue:'#3E6E99'}},
+  coral:  {label:'كورال',
+    dark:{brand:'#C24734',brand2:'#E8836A',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#C24734',brand2:'#9C3A29',gold:'#B9853A',red:'#A83824',blue:'#3E6E99'}},
+  gold:   {label:'ذهبي',
+    dark:{brand:'#B9853A',brand2:'#D9BE8E',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#B9853A',brand2:'#8F6A2E',gold:'#8F6A2E',red:'#C24734',blue:'#3E6E99'}},
+  teal:   {label:'تركواز',
+    dark:{brand:'#1F8A93',brand2:'#4FD1D6',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#1F8A93',brand2:'#166970',gold:'#B9853A',red:'#C24734',blue:'#3E6E99'}},
+  rose:   {label:'وردي',
+    dark:{brand:'#B03A66',brand2:'#E87FA8',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#B03A66',brand2:'#872C4E',gold:'#B9853A',red:'#C24734',blue:'#3E6E99'}},
+  slate:  {label:'رمادي داكن',
+    dark:{brand:'#4A5A6A',brand2:'#8FA3B5',gold:'#D4A054',red:'#E2604F',blue:'#5A8FBF'},
+    light:{brand:'#4A5A6A',brand2:'#37444F',gold:'#B9853A',red:'#C24734',blue:'#3E6E99'}},
 };
+const COLOR_ROLES = [
+  {key:'bg', label:'الخلفية الرئيسية', group:'الخلفيات'},
+  {key:'bg-elev', label:'خلفية مرتفعة (الهيدر والبار)', group:'الخلفيات'},
+  {key:'bg-elev-2', label:'خلفية العناصر الداخلية', group:'الخلفيات'},
+  {key:'card', label:'خلفية الكروت', group:'الخلفيات'},
+  {key:'border', label:'لون الحدود والفواصل', group:'الخلفيات'},
+  {key:'ink', label:'النص الأساسي', group:'النصوص'},
+  {key:'ink-dim', label:'النص الثانوي', group:'النصوص'},
+  {key:'ink-faint', label:'النص الباهت/الوصفي', group:'النصوص'},
+  {key:'brand', label:'اللون الأساسي', group:'الألوان المميزة'},
+  {key:'brand-2', label:'اللون الثانوي', group:'الألوان المميزة'},
+  {key:'gold', label:'لون الدهب والأصول', group:'الألوان المميزة'},
+  {key:'gold-dim', label:'لون الدهب الباهت', group:'الألوان المميزة'},
+  {key:'red', label:'لون الصرف / السلبي', group:'الألوان المميزة'},
+  {key:'red-dim', label:'خلفية الصرف الباهتة', group:'الألوان المميزة'},
+  {key:'blue', label:'لون التحويلات / المعلومات', group:'الألوان المميزة'},
+];
+const ACCENT_DRIVEN_KEYS = ['brand','brand-2','gold','red','blue'];
 function applyAccentTheme(){
   const t = ACCENT_THEMES[state.settings.accentTheme] || ACCENT_THEMES.green;
   const variant = state.settings.theme==='light' ? t.light : t.dark;
+  if(!state.settings.customColors) state.settings.customColors = {};
+  const accentDefaults = {brand:variant.brand, 'brand-2':variant.brand2, gold:variant.gold, red:variant.red, blue:variant.blue};
   [document.documentElement, document.body].forEach(el=>{
-    el.style.setProperty('--brand', variant.brand);
-    el.style.setProperty('--brand-2', variant.brand2);
+    COLOR_ROLES.forEach(r=>{
+      const custom = state.settings.customColors[r.key];
+      if(custom){ el.style.setProperty('--'+r.key, custom); }
+      else if(ACCENT_DRIVEN_KEYS.includes(r.key)){ el.style.setProperty('--'+r.key, accentDefaults[r.key]); }
+      else { el.style.removeProperty('--'+r.key); } // fall back to the plain CSS theme default
+    });
   });
+}
+function setCustomColor(role, hex){
+  if(!state.settings.customColors) state.settings.customColors = {};
+  state.settings.customColors[role] = hex;
+  save(); applyAccentTheme(); openPanel('customcolors');
+}
+function resetCustomColor(role){
+  if(state.settings.customColors) delete state.settings.customColors[role];
+  save(); applyAccentTheme(); openPanel('customcolors');
+}
+function resetAllCustomColors(){
+  state.settings.customColors = {};
+  save(); applyAccentTheme(); openPanel('customcolors'); toast('اترجعت كل الألوان الافتراضية');
+}
+function getEffectiveColorHex(key){
+  const custom = state.settings.customColors && state.settings.customColors[key];
+  if(custom) return custom;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--'+key).trim();
+  if(/^#([0-9a-f]{6}|[0-9a-f]{3})$/i.test(raw)) return raw;
+  // convert non-hex computed colors (rare) to hex via a throwaway canvas-free trick
+  const tmp = document.createElement('div');
+  tmp.style.color = raw || '#000000';
+  document.body.appendChild(tmp);
+  const rgb = getComputedStyle(tmp).color.match(/\d+/g);
+  document.body.removeChild(tmp);
+  if(!rgb) return '#000000';
+  return '#'+rgb.slice(0,3).map(n=>(+n).toString(16).padStart(2,'0')).join('');
+}
+function customColorsPanelHTML(){
+  const groups = {};
+  COLOR_ROLES.forEach(r=>{ if(!groups[r.group]) groups[r.group]=[]; groups[r.group].push(r); });
+  return `
+    <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:14px;padding:0 4px;">أي لون هنا — ولا واحد مستثنى. عدّله براحتك وهيفضل ثابت حتى لو غيّرت الثيم أو الوضع الفاتح/الغامق، لحد ما تستعيده بنفسك.</div>
+    ${Object.entries(groups).map(([groupName, roles])=>`
+      <div class="section-title" style="margin-top:14px;">${groupName}</div>
+      <div class="card">
+        ${roles.map(r=>{
+          const custom = state.settings.customColors && state.settings.customColors[r.key];
+          const current = getEffectiveColorHex(r.key);
+          return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+            <input type="color" value="${current}" onchange="setCustomColor('${r.key}',this.value)" style="width:44px;height:44px;border-radius:10px;border:none;padding:0;background:none;flex-shrink:0;">
+            <div style="flex:1;"><div style="font-weight:700;font-size:13px;">${r.label}</div>${custom?`<div style="font-size:10.5px;color:var(--gold);">معدّل يدويًا</div>`:''}</div>
+            ${custom?`<button class="icon-btn" style="width:34px;height:34px;flex-shrink:0;" onclick="resetCustomColor('${r.key}')">↺</button>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    `).join('')}
+    <button class="btn-secondary" style="margin-top:14px;" onclick="resetAllCustomColors()">استعادة كل الألوان الافتراضية</button>
+  `;
 }
 const FONT_SCALES = {small:0.9, medium:1, large:1.15};
 function applyFontScale(){
@@ -4640,6 +4731,10 @@ function appearancePanelHTML(){
     <div class="section-title">عرض الأرقام</div>
     <div class="card menu-list">
       <div class="m-item" onclick="toggleShowDecimals()"><div class="m-icon">#️⃣</div><div class="m-text"><div class="m-title">إظهار الكسور العشرية</div><div class="m-sub">${state.settings.showDecimals?'شغال (100.00)':'متوقف (100)'}</div></div></div>
+    </div>
+    <div class="section-title">تحكم كامل</div>
+    <div class="card menu-list">
+      <div class="m-item" onclick="openPanel('customcolors')"><div class="m-icon">🎨</div><div class="m-text"><div class="m-title">تخصيص الألوان يدويًا</div><div class="m-sub">عدّل أي لون براحتك، مش هيتغير مع الثيمات</div></div><div class="m-arrow">‹</div></div>
     </div>
   `;
 }
