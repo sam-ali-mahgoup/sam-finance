@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sam-finance-v26';
+const CACHE_NAME = 'sam-finance-v27';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', event => {

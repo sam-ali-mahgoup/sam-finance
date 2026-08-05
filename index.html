@@ -720,6 +720,7 @@ function defaultState(){
       {id:'cat_other_i',name:'أخرى',icon:'💰',type:'income'},
       {id:'cat_debt_in',name:'دين مقبوض',icon:'🤝',type:'income'},
       {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
+      {id:'cat_installment',name:'قسط',icon:'💳',type:'expense'},
       {id:'cat_savings',name:'ادخار',icon:'🏁',type:'expense'},
       {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
     ],
@@ -776,12 +777,14 @@ function load(){
   const requiredCats = [
     {id:'cat_debt_in',name:'دين مقبوض',icon:'🤝',type:'income'},
     {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
+    {id:'cat_installment',name:'قسط',icon:'💳',type:'expense'},
     {id:'cat_savings',name:'ادخار',icon:'🏁',type:'expense'},
     {id:'cat_savings_back',name:'سحب ادخار',icon:'🏁',type:'income'},
     {id:'cat_asset_buy',name:'شراء أصل',icon:'💎',type:'expense'},
     {id:'cat_asset_sell',name:'بيع أصل',icon:'💎',type:'income'},
   ];
   requiredCats.forEach(rc=>{ if(!state.categories.find(c=>c.id===rc.id)) state.categories.push({...rc, parentId:null}); });
+  state.transactions.forEach(t=>{ if(t.installmentId && t.categoryId==='cat_debt_out') t.categoryId='cat_installment'; });
   if(!state.settings.ratesInversionFixApplied){
     state.settings.ratesInversionFixApplied = true;
     state.settings.ratesLastUpdated = null; // forces an immediate correct re-fetch on next init
@@ -2789,8 +2792,8 @@ function debtsPanelHTML(){
   const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
   const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
   html += `<div class="stat-grid" style="margin-bottom:14px;">
-    <div class="stat-box"><div class="sv" style="color:var(--red);">${fmt(owe)}</div><div class="sl">باقي عليك</div></div>
-    <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(owed)}</div><div class="sl">باقي ليك</div></div>
+    <div class="stat-box"><div class="sv money" style="color:var(--red);">${fmt(owe)}</div><div class="sl">باقي عليك</div></div>
+    <div class="stat-box"><div class="sv money" style="color:var(--brand-2);">${fmt(owed)}</div><div class="sl">باقي ليك</div></div>
   </div>`;
   const oweDebts = state.debts.filter(d=>d.direction==='owe'&&!d.settled).map(d=>({...d, remaining: d.amount-(d.paidAmount||0)})).sort((a,b)=>a.remaining-b.remaining);
   if(oweDebts.length>1){
@@ -2810,7 +2813,7 @@ function debtsPanelHTML(){
           <div class="debt-name">${esc(d.person)}</div>
           <div class="debt-tag ${d.direction}">${d.direction==='owe'?'عليك':'ليك'}${d.settled?' · اتسدد بالكامل':''}</div>
         </div>
-        <div class="debt-amt" style="color:${d.direction==='owe'?'var(--red)':'var(--brand-2)'};">${fmt(remaining)} ${d.currency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> متبقي من ${fmt(d.amount)}</span></div>
+        <div class="debt-amt money" style="color:${d.direction==='owe'?'var(--red)':'var(--brand-2)'};">${fmt(remaining)} ${d.currency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> متبقي من ${fmt(d.amount)}</span></div>
         ${paid>0?`<div class="goal-track" style="margin-top:8px;"><div class="goal-fill" style="width:${pct}%;"></div></div>`:''}
         ${d.dueDate?`<div class="debt-meta">📅 موعد السداد: ${fmtDate(d.dueDate)}</div>`:''}
         ${d.note?`<div class="debt-meta">${esc(d.note)}</div>`:''}
@@ -2918,7 +2921,7 @@ function goalsPanelHTML(){
       <div onclick="openGoalForm('${g.id}')">
         <div class="goal-top"><div class="goal-name">🏁 ${esc(g.name)}</div><div style="font-weight:800;">${pct.toFixed(0)}%</div></div>
         <div class="goal-track"><div class="goal-fill" style="width:${pct}%;"></div></div>
-        <div class="goal-nums"><span>${fmt(g.current)} ${g.currency}</span><span>الهدف: ${fmt(g.target)} ${g.currency}</span></div>
+        <div class="goal-nums money"><span>${fmt(g.current)} ${g.currency}</span><span>الهدف: ${fmt(g.target)} ${g.currency}</span></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button class="btn-secondary" style="margin-top:0;flex:1;" onclick="event.stopPropagation();openGoalMoveForm('${g.id}','contribute')">💰 ساهم</button>
@@ -3193,7 +3196,12 @@ function saveAsset(id){
   if(id){
     const ex = state.assets.find(a=>a.id===id);
     ex.name = name; ex.icon = icon;
-    if(ex.kind==='electronics'){
+    if(ex.kind==='gold' || ex.isGold){
+      const gramWeight = parseFloat(document.getElementById('assetGrams')?.value);
+      const karat = parseInt(document.getElementById('assetKarat')?.value);
+      if(gramWeight>0) ex.gramWeight = gramWeight;
+      if(!isNaN(karat)) ex.karat = karat;
+    } else if(ex.kind==='electronics'){
       const rate = parseFloat(document.getElementById('assetDeprRate')?.value);
       if(!isNaN(rate)) ex.annualDepreciationRate = rate;
     } else if(ex.kind==='manual'){
@@ -3762,9 +3770,9 @@ function annualReportPanelHTML(){
   return `
     <div class="chip-select" style="margin-bottom:14px;">${years.map(y=>`<button type="button" class="${y===year?'sel':''}" onclick="annualSelectedYear='${y}';renderPanel();">${y}</button>`).join('')}</div>
     <div class="stat-grid">
-      <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(totalInc)}</div><div class="sl">إجمالي الدخل</div></div>
-      <div class="stat-box"><div class="sv" style="color:var(--red);">${fmt(totalExp)}</div><div class="sl">إجمالي الصرف</div></div>
-      <div class="stat-box"><div class="sv">${fmt(totalInc-totalExp)}</div><div class="sl">صافي الادخار</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--brand-2);">${fmt(totalInc)}</div><div class="sl">إجمالي الدخل</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--red);">${fmt(totalExp)}</div><div class="sl">إجمالي الصرف</div></div>
+      <div class="stat-box"><div class="sv money">${fmt(totalInc-totalExp)}</div><div class="sl">صافي الادخار</div></div>
       <div class="stat-box"><div class="sv" style="font-size:13.5px;">${topCat?topCat.icon+' '+esc(topCat.name):'—'}</div><div class="sl">أكتر تصنيف صرف</div></div>
     </div>
     <div class="section-title">أحسن وأضعف شهر</div>
@@ -3999,7 +4007,7 @@ function installmentsPanelHTML(){
           <div class="debt-name">${esc(ins.itemName)}</div>
           <div class="debt-tag owe">${done?'خلص':`باقي ${remaining} قسط`}</div>
         </div>
-        <div class="debt-amt" style="color:var(--red);">${fmt(ins.installmentAmount)} ${state.settings.baseCurrency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> / شهريًا</span></div>
+        <div class="debt-amt money" style="color:var(--red);">${fmt(ins.installmentAmount)} ${state.settings.baseCurrency}<span style="font-size:11px;color:var(--ink-faint);font-weight:600;"> / شهريًا</span></div>
         <div class="goal-track" style="margin-top:8px;"><div class="goal-fill" style="width:${pct}%;"></div></div>
         <div class="debt-meta">${ins.paidCount} من ${ins.numInstallments} قسط اتسدد</div>
       </div>
@@ -4055,7 +4063,7 @@ function confirmPayInstallment(id){
   if(!ins) return;
   const wSel = document.getElementById('insPayWalletChips').querySelector('.sel');
   if(!wSel){ toast('اختار محفظة'); return; }
-  state.transactions.push({id:uid(), type:'expense', walletId:wSel.dataset.w, categoryId:'cat_debt_out', amount:ins.installmentAmount, note:'قسط: '+ins.itemName, date:todayStr(), installmentId:ins.id});
+  state.transactions.push({id:uid(), type:'expense', walletId:wSel.dataset.w, categoryId:'cat_installment', amount:ins.installmentAmount, note:'قسط: '+ins.itemName, date:todayStr(), installmentId:ins.id});
   ins.paidCount++;
   const justFinished = ins.paidCount>=ins.numInstallments;
   save(); closeModal(); renderAll(); toast('اتسجل القسط ✓');
@@ -4067,17 +4075,17 @@ function calendarPanelHTML(){
   const events = [];
   state.recurring.forEach(r=>{
     if(r.paused) return;
-    events.push({date:r.nextDate, icon:r.type==='income'?'💰':'🔁', label:r.name, sub: r.type==='income'?'دخل متوقع':'هيتخصم', color: r.type==='income'?'var(--brand-2)':'var(--red)'});
+    events.push({date:r.nextDate, icon:r.type==='income'?'💰':'🔁', label:r.name, sub: r.type==='income'?'دخل متوقع':'هيتخصم', color: r.type==='income'?'var(--brand-2)':'var(--red)', subIsMoney:false});
   });
   state.debts.forEach(d=>{
     if(d.settled || !d.dueDate) return;
-    events.push({date:d.dueDate, icon:'🤝', label:(d.direction==='owe'?'سداد: ':'استلام: ')+d.person, sub: fmt(d.amount-(d.paidAmount||0))+' '+state.settings.baseCurrency, color:'var(--gold)'});
+    events.push({date:d.dueDate, icon:'🤝', label:(d.direction==='owe'?'سداد: ':'استلام: ')+d.person, sub: fmt(d.amount-(d.paidAmount||0))+' '+state.settings.baseCurrency, color:'var(--gold)', subIsMoney:true});
   });
   state.installments.forEach(ins=>{
     if(ins.paidCount>=ins.numInstallments) return;
     let due = ins.startDate;
     for(let i=0;i<ins.paidCount;i++) due = addInterval(due,'monthly');
-    events.push({date:due, icon:'💳', label:'قسط: '+ins.itemName, sub: fmt(ins.installmentAmount)+' '+state.settings.baseCurrency, color:'var(--red)'});
+    events.push({date:due, icon:'💳', label:'قسط: '+ins.itemName, sub: fmt(ins.installmentAmount)+' '+state.settings.baseCurrency, color:'var(--red)', subIsMoney:true});
   });
   const today = todayStr();
   const upcoming = events.filter(e=>e.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
@@ -4087,7 +4095,7 @@ function calendarPanelHTML(){
     if(e.date!==lastDate){ html += `<div class="day-group-label">${fmtDate(e.date)}</div>`; lastDate=e.date; }
     html += `<div class="card" style="padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;">
       <div style="font-size:20px;">${e.icon}</div>
-      <div style="flex:1;"><div style="font-weight:700;font-size:13.5px;">${esc(e.label)}</div><div style="font-size:11px;color:var(--ink-faint);">${esc(e.sub)}</div></div>
+      <div style="flex:1;"><div style="font-weight:700;font-size:13.5px;">${esc(e.label)}</div><div style="font-size:11px;color:var(--ink-faint);" class="${e.subIsMoney?'money':''}">${esc(e.sub)}</div></div>
       <div class="money" style="color:${e.color};font-weight:800;font-size:12px;">${fmtDate(e.date)}</div>
     </div>`;
   });
