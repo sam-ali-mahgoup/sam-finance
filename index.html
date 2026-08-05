@@ -211,6 +211,7 @@ button{cursor:pointer;border:none;background:none;}
 }
 .wallet-chip:active{transform:scale(.96);}
 .wallet-chip .wc-top{display:flex;justify-content:space-between;align-items:flex-start;}
+.quick-transfer-btn{width:24px;height:24px;border-radius:8px;background:var(--bg-elev-2);font-size:12px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}
 .wallet-chip .wc-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
 .wallet-chip .wc-name{font-size:12.5px;color:var(--ink-dim);margin-top:10px;font-weight:600;}
 .wallet-chip .wc-bal{font-size:17px;font-weight:800;margin-top:2px;direction:ltr;text-align:right;}
@@ -528,6 +529,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
     </div>
 
     <div id="healthScoreCard"></div>
+    <div id="weeklyChallengeCard"></div>
 
     <div class="section-title">محافظك <span class="link" onclick="switchView('wallets')">كل المحافظ ‹</span></div>
     <div class="wallets-scroll" id="dashWallets"></div>
@@ -566,6 +568,11 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
     <div id="forecastCard"></div>
     <div id="anomalyCard"></div>
     <div id="sameDayCard"></div>
+    <div id="biggestExpenseCard"></div>
+    <div id="cashDigitalCard"></div>
+    <div id="commonDayCard"></div>
+    <div id="yoyCompareCard"></div>
+    <div id="depletionCard"></div>
     <div class="stat-grid">
       <div class="stat-box"><div class="sv" id="repIncome" style="color:var(--brand-2);">0</div><div class="sl">إجمالي الدخل</div></div>
       <div class="stat-box"><div class="sv" id="repExpense" style="color:var(--red);">0</div><div class="sl">إجمالي الصرف</div></div>
@@ -681,7 +688,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 const STORAGE_KEY = 'samFinanceData_v1';
 const ICONS_EXPENSE = ['🍔','🚌','🛒','🏠','💊','🎮','👕','📱','✈️','📚','🎬','⚡','💧','☕','🐾','🎁','🛠️','💇','🏋️','🧾'];
 const ICONS_INCOME = ['💼','🎁','📈','💻','🏦','🤝','💰','🧑‍🌾'];
-const WALLET_ICONS = ['👛','💵','🏦','📱','💳','🪙','💴','🧧'];
+const WALLET_ICONS = ['👛','💵','🏦','📱','💳','🪙','💴','🧧','💰','🏧','💶','💷','🐖','🔐','📊','💎','🎫','🧾','🏠','🚗'];
 const COLORS = ['#1F8A70','#D4A054','#5A8FBF','#E2604F','#9C6ADE','#4FD1A5','#E8A87C','#6C7A89'];
 
 let state = null;
@@ -754,7 +761,8 @@ function load(){
   if(!state.assets) state.assets = [];
   if(!state.merchants) state.merchants = [];
   if(!state.installments) state.installments = [];
-  state.wallets.forEach(w=>{ if(w.archived===undefined) w.archived = false; });
+  if(!state.weeklyChallenge) state.weeklyChallenge = {target:null, weekStart:null};
+  state.wallets.forEach(w=>{ if(w.archived===undefined) w.archived = false; if(w.walletType===undefined) w.walletType = 'digital'; });
   state.transactions.forEach(t=>{ if(t.placeId===undefined) t.placeId = null; });
   if(state.settings.ratesAutoUpdate===undefined) state.settings.ratesAutoUpdate = true;
   if(state.settings.ratesLastUpdated===undefined) state.settings.ratesLastUpdated = null;
@@ -780,6 +788,8 @@ function load(){
   if(state.settings.onboardingSeen===undefined) state.settings.onboardingSeen = false;
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
+  if(state.settings.fontScale===undefined) state.settings.fontScale = 'medium';
+  if(state.settings.showDecimals===undefined) state.settings.showDecimals = true;
   if(state.settings.goldPricePerGramUSD===undefined) state.settings.goldPricePerGramUSD = null;
   if(state.settings.goldPriceLastUpdated===undefined) state.settings.goldPriceLastUpdated = null;
   if(state.settings.goldPriceIsManual===undefined) state.settings.goldPriceIsManual = false;
@@ -837,7 +847,8 @@ function toastWithUndo(msg, undoFn, ms){
 
 function fmt(n){
   n = Number(n)||0;
-  return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const showDec = !state.settings || state.settings.showDecimals!==false;
+  return n.toLocaleString('en-US', showDec?{minimumFractionDigits:2,maximumFractionDigits:2}:{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 function toBase(amount,currency){
   const r = state.settings.rates[currency] || 1;
@@ -1206,6 +1217,7 @@ function renderDashboard(){
 
   // budget streak
   renderHealthScore();
+  renderWeeklyChallenge();
   const streakEl = document.getElementById('streakBadge');
   if(streakEl){
     const streak = calcBudgetStreak();
@@ -1216,7 +1228,7 @@ function renderDashboard(){
   const ws = document.getElementById('dashWallets');
   ws.innerHTML = sortedWallets().map(w=>`
     <div class="wallet-chip" onclick="switchView('wallets')">
-      <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div></div>
+      <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div><button class="quick-transfer-btn" onclick="event.stopPropagation();openTxForm('transfer');setTimeout(()=>{const sel=document.getElementById('txFromWallet');if(sel)sel.value='${w.id}';},60);">🔁</button></div>
       <div class="wc-name">${esc(w.name)}</div>
       <div class="wc-bal money">${fmt(walletBalance(w.id))} ${w.currency}</div>
     </div>`).join('') + `<div class="wallet-chip add-new" onclick="openWalletForm()"><div style="font-size:22px;">+</div><div style="font-size:11.5px;">محفظة جديدة</div></div>`;
@@ -1274,7 +1286,7 @@ function renderDashboard(){
       const pct = Math.min(100,(spent/b.limit)*100);
       const cls = pct>=100?'over':(pct>=80?'warn':'');
       return `<div class="budget-mini">
-        <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${fmt(spent)} / ${fmt(b.limit)}</span></div>
+        <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)}</span></div>
         <div class="bm-track"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
       </div>`;
     }).join('');
@@ -1290,6 +1302,22 @@ function monthSpentForCategory(categoryId){
   const {start,end} = currentMonthRange();
   return state.transactions.filter(t=>t.type==='expense' && t.categoryId===categoryId && t.date>=start && t.date<=end)
     .reduce((s,t)=> s + toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency), 0);
+}
+function lastMonthSpentForCategory(categoryId){
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const start = localDateStr(new Date(d.getFullYear(),d.getMonth(),1));
+  const end = localDateStr(new Date(d.getFullYear(),d.getMonth()+1,0));
+  return state.transactions.filter(t=>t.type==='expense' && t.categoryId===categoryId && t.date>=start && t.date<=end)
+    .reduce((s,t)=> s + toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency), 0);
+}
+function budgetTrendArrow(categoryId, current){
+  const last = lastMonthSpentForCategory(categoryId);
+  if(last<=0) return '';
+  const diff = ((current-last)/last)*100;
+  if(Math.abs(diff)<5) return '<span style="color:var(--ink-faint);">▬</span>';
+  const up = diff>0;
+  return `<span style="color:${up?'var(--red)':'var(--brand-2)'};font-weight:800;">${up?'▲':'▼'} ${Math.abs(diff).toFixed(0)}%</span>`;
 }
 
 function emptyStateHTML(title,sub){
@@ -1801,6 +1829,123 @@ function renderSameDayLastYear(){
   </div>`;
 }
 
+/* ---- Biggest expense spotlight ---- */
+function renderBiggestExpense(){
+  const host = document.getElementById('biggestExpenseCard');
+  if(!host) return;
+  const {start,end} = periodRange();
+  let biggest = null, biggestVal = 0;
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense'||t.date<start||t.date>end) return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    const v = toBase(t.amount,cur);
+    if(v>biggestVal){ biggestVal=v; biggest=t; }
+  });
+  if(!biggest){ host.innerHTML=''; return; }
+  const c = catById(biggest.categoryId);
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">💥 أكبر مصروف في الفترة</div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="font-size:26px;">${c?c.icon:'🧾'}</div>
+      <div style="flex:1;"><div style="font-weight:700;font-size:13.5px;">${esc(biggest.note||(c?c.name:'مصروف'))}</div><div style="font-size:11px;color:var(--ink-faint);">${fmtDate(biggest.date)}</div></div>
+      <div class="money" style="font-weight:800;color:var(--red);font-size:16px;">${fmt(biggestVal)}</div>
+    </div>
+  </div>`;
+}
+
+/* ---- Cash vs digital ratio ---- */
+function renderCashDigitalRatio(){
+  const host = document.getElementById('cashDigitalCard');
+  if(!host) return;
+  const {start,end} = periodRange();
+  let cash=0, digital=0;
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense'||t.date<start||t.date>end) return;
+    const w = walletById(t.walletId);
+    if(!w) return;
+    const v = toBase(t.amount,w.currency);
+    if(w.walletType==='cash') cash+=v; else digital+=v;
+  });
+  const total = cash+digital;
+  if(total<=0){ host.innerHTML=''; return; }
+  const cashPct = (cash/total)*100;
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:10px;">💵 كاش مقابل 💳 رقمي</div>
+    <div class="bm-track" style="height:14px;display:flex;overflow:hidden;">
+      <div style="width:${cashPct}%;background:var(--gold);"></div>
+      <div style="width:${100-cashPct}%;background:var(--blue);"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;">
+      <span>💵 كاش ${cashPct.toFixed(0)}% (${fmt(cash)})</span>
+      <span>💳 رقمي ${(100-cashPct).toFixed(0)}% (${fmt(digital)})</span>
+    </div>
+  </div>`;
+}
+
+/* ---- Most common spending day of week ---- */
+function renderCommonSpendDay(){
+  const host = document.getElementById('commonDayCard');
+  if(!host) return;
+  const {start,end} = periodRange();
+  const dowNames = ['الأحد','الاتنين','التلات','الأربع','الخميس','الجمعة','السبت'];
+  const totals = Array(7).fill(0);
+  const counts = Array(7).fill(0);
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense'||t.date<start||t.date>end) return;
+    const d = new Date(t.date+'T00:00:00');
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    totals[d.getDay()] += toBase(t.amount,cur);
+    counts[d.getDay()]++;
+  });
+  const maxIdx = totals.indexOf(Math.max(...totals));
+  if(totals[maxIdx]<=0){ host.innerHTML=''; return; }
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">📅 أكتر يوم بتصرف فيه</div>
+    <div style="font-size:12.5px;color:var(--ink-dim);">يوم <b style="color:var(--gold);">${dowNames[maxIdx]}</b> — صرفت فيه <b class="money">${fmt(totals[maxIdx])} ${state.settings.baseCurrency}</b> على مدار ${counts[maxIdx]} حركة</div>
+  </div>`;
+}
+
+/* ---- Year-over-year comparison ---- */
+function renderYoyCompare(){
+  const host = document.getElementById('yoyCompareCard');
+  if(!host) return;
+  const now = new Date();
+  const {start,end} = currentMonthRange();
+  const lastYearStart = localDateStr(new Date(now.getFullYear()-1, now.getMonth(), 1));
+  const lastYearEnd = localDateStr(new Date(now.getFullYear()-1, now.getMonth()+1, 0));
+  let curExp=0, lastExp=0;
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense') return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    if(t.date>=start&&t.date<=end) curExp+=toBase(t.amount,cur);
+    if(t.date>=lastYearStart&&t.date<=lastYearEnd) lastExp+=toBase(t.amount,cur);
+  });
+  if(lastExp<=0){ host.innerHTML=''; return; }
+  const diff = ((curExp-lastExp)/lastExp)*100;
+  const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">📆 مقارنة بـ ${monthNames[now.getMonth()]} السنة اللي فاتت</div>
+    <div style="font-size:12.5px;color:var(--ink-dim);">صرفت <b class="money">${fmt(curExp)}</b> الشهر ده مقابل <b class="money">${fmt(lastExp)}</b> في نفس الشهر العام اللي فات — <b style="color:${diff>0?'var(--red)':'var(--brand-2)'};">${diff>=0?'+':''}${diff.toFixed(0)}%</b></div>
+  </div>`;
+}
+
+/* ---- Balance depletion forecast ---- */
+function renderDepletionForecast(){
+  const host = document.getElementById('depletionCard');
+  if(!host) return;
+  const avgExp = calcAvgMonthlyExpense();
+  const balance = totalBaseBalance();
+  if(avgExp<=0 || balance<=0){ host.innerHTML=''; return; }
+  const dailyBurn = avgExp/30;
+  const daysLeft = balance/dailyBurn;
+  if(daysLeft>365){ host.innerHTML=''; return; }
+  const depletionDate = new Date(); depletionDate.setDate(depletionDate.getDate()+Math.round(daysLeft));
+  host.innerHTML = `<div class="card" style="margin-top:10px;border-color:${daysLeft<30?'var(--red)':'var(--gold)'};">
+    <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">📉 توقع نفاد الرصيد</div>
+    <div style="font-size:12.5px;color:var(--ink-dim);">لو استمريت بمعدل صرفك الحالي (من غير أي دخل جديد)، رصيدك ممكن يخلص حوالي <b style="color:${daysLeft<30?'var(--red)':'var(--gold)'};">${fmtDate(localDateStr(depletionDate))}</b> (${Math.round(daysLeft)} يوم من دلوقتي).</div>
+  </div>`;
+}
+
 /* ---- Budget streak ---- */
 /* ---- Financial Health Score + Runway ---- */
 function calcAvgMonthlyExpense(){
@@ -1854,6 +1999,49 @@ function computeHealthScore(){
   }
   const total = Math.max(0, Math.min(100, Math.round(savingsScore+budgetScore+debtScore+runwayScore)));
   return {total, runwayMonths};
+}
+function currentWeekStart(){
+  const now = new Date();
+  const daysSinceSat = (now.getDay()+1)%7;
+  const d = new Date(now); d.setDate(now.getDate()-daysSinceSat);
+  return localDateStr(d);
+}
+function setWeeklyChallenge(){
+  const input = prompt('حط حد أقصى لصرفك الأسبوع ده ('+state.settings.baseCurrency+')');
+  if(input===null) return;
+  const val = parseFloat(input);
+  if(!val||val<=0){ toast('اكتب رقم صحيح'); return; }
+  state.weeklyChallenge = {target:val, weekStart:currentWeekStart()};
+  save(); renderAll(); toast('اتحدد التحدي ✓');
+}
+function renderWeeklyChallenge(){
+  const host = document.getElementById('weeklyChallengeCard');
+  if(!host) return;
+  const wc = state.weeklyChallenge;
+  const thisWeek = currentWeekStart();
+  if(!wc.target || wc.weekStart!==thisWeek){
+    host.innerHTML = `<div class="card" style="margin-top:10px;text-align:center;" onclick="setWeeklyChallenge()">
+      <div style="font-weight:800;font-size:13px;">🎯 حدد تحدي صرف للأسبوع ده</div>
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">اضغط هنا عشان تحط حد أقصى تتحدى نفسك تفضل تحته</div>
+    </div>`;
+    return;
+  }
+  let spent = 0;
+  state.transactions.forEach(t=>{
+    if(t.type!=='expense'||t.date<thisWeek) return;
+    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+    spent += toBase(t.amount,cur);
+  });
+  const pct = Math.min(100,(spent/wc.target)*100);
+  const over = spent>wc.target;
+  host.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-weight:800;font-size:13px;">🎯 تحدي الأسبوع</div>
+      <span style="font-size:11px;color:${over?'var(--red)':'var(--brand-2)'};font-weight:700;cursor:pointer;" onclick="setWeeklyChallenge()">✏️ تعديل</span>
+    </div>
+    <div class="bm-track"><div class="bm-fill ${over?'over':(pct>80?'warn':'')}" style="width:${pct}%;"></div></div>
+    <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;" class="money">${fmt(spent)} / ${fmt(wc.target)} ${state.settings.baseCurrency}${over?' — تخطيت التحدي 😅':''}</div>
+  </div>`;
 }
 function renderHealthScore(){
   const host = document.getElementById('healthScoreCard');
@@ -2023,6 +2211,11 @@ function renderReports(){
   renderForecast();
   renderAnomalies();
   renderSameDayLastYear();
+  renderBiggestExpense();
+  renderCashDigitalRatio();
+  renderCommonSpendDay();
+  renderYoyCompare();
+  renderDepletionForecast();
   const {start,end} = periodRange();
   let inc=0,exp=0;
   const byCat = {};
@@ -2375,7 +2568,7 @@ function budgetsPanelHTML(){
     const pct = Math.min(100,(spent/b.limit)*100);
     const cls = pct>=100?'over':(pct>=80?'warn':'');
     return `<div class="card" style="margin-top:10px;" onclick="openBudgetForm('${b.categoryId}')">
-      <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${fmt(spent)} / ${fmt(b.limit)} ${state.settings.baseCurrency}</span></div>
+      <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)} ${state.settings.baseCurrency}</span></div>
       <div class="bm-track" style="margin-top:6px;"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
     </div>`;
   }).join('');
@@ -3344,8 +3537,16 @@ function startPinEntry(){
 
 /* ---- Backup ---- */
 function backupPanelHTML(){
+  const sizeKB = (new Blob([JSON.stringify(state)]).size/1024).toFixed(1);
+  const limitKB = 5*1024;
+  const usagePct = Math.min(100,(sizeKB/limitKB)*100);
   return `
     <div class="card">
+      <div style="font-weight:800;font-size:13px;margin-bottom:8px;">📦 المساحة المستخدمة</div>
+      <div class="bm-track"><div class="bm-fill ${usagePct>80?'over':(usagePct>50?'warn':'')}" style="width:${usagePct}%;"></div></div>
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">${sizeKB} ك.ب من حوالي ${(limitKB/1024).toFixed(0)} م.ب المتاحة</div>
+    </div>
+    <div class="card" style="margin-top:12px;">
       <div style="font-weight:800;margin-bottom:6px;">تصدير نسخة احتياطية</div>
       <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">هتنزل ملف JSON فيه كل بياناتك، احتفظ بيه في مكان آمن.</div>
       <button class="btn-primary" onclick="exportBackup()">⬇ تصدير الآن</button>
@@ -3986,6 +4187,12 @@ function openWalletForm(id){
     <div class="field"><label>العملة</label>
       <select id="wCurrency">${Object.keys(state.settings.rates).map(c=>`<option value="${c}" ${ex&&ex.currency===c?'selected':(!ex&&c===state.settings.baseCurrency?'selected':'')}>${c}</option>`).join('')}</select>
     </div>
+    <div class="field"><label>نوع المحفظة</label>
+      <div class="type-toggle" id="wType">
+        <button type="button" class="${(!ex||ex.walletType==='cash')?'active':''}" data-t="cash" onclick="toggleType(this,'wType')">💵 كاش</button>
+        <button type="button" class="${ex&&ex.walletType==='digital'?'active':''}" data-t="digital" onclick="toggleType(this,'wType')">💳 رقمي (بنك/محفظة إلكترونية)</button>
+      </div>
+    </div>
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="wIconGrid">${WALLET_ICONS.map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':''}" data-i="${ic}" onclick="selectIcon2(this,'wIconGrid')">${ic}</button>`).join('')}</div></div>
     <div class="field"><label>اللون</label><div class="color-grid" id="wColorGrid">${COLORS.map(c=>`<button type="button" class="${ex&&ex.color===c?'sel':''}" data-c="${c}" style="background:${c};" onclick="selectColor(this)"></button>`).join('')}</div></div>
     <div class="field"><label>تنبيه لو الرصيد أقل من (اختياري)</label><input id="wLowAlert" type="text" inputmode="decimal" value="${ex&&ex.lowBalanceAlert!=null?ex.lowBalanceAlert:''}" placeholder="اسيبها فاضية لو مش عايز تنبيه" onblur="evalCalcField(this)"></div>
@@ -4012,10 +4219,11 @@ function saveWallet(id){
   const lowBalanceAlert = lowAlertRaw!=='' ? (parseFloat(lowAlertRaw)||null) : null;
   const sharedWithRaw = document.getElementById('wSharedWith').value.trim();
   const sharedWith = sharedWithRaw || null;
+  const walletType = document.querySelector('#wType .active').dataset.t;
   if(id){
-    Object.assign(walletById(id), {name,currency,icon,color,lowBalanceAlert,sharedWith});
+    Object.assign(walletById(id), {name,currency,icon,color,lowBalanceAlert,sharedWith,walletType});
   } else {
-    const w = {id:uid(),name,currency,icon,color,order:state.wallets.length,lowBalanceAlert,sharedWith};
+    const w = {id:uid(),name,currency,icon,color,order:state.wallets.length,lowBalanceAlert,sharedWith,walletType};
     state.wallets.push(w);
     const opening = parseFloat(document.getElementById('wOpening')?.value);
     if(opening){
@@ -4354,6 +4562,18 @@ function applyAccentTheme(){
   document.documentElement.style.setProperty('--brand', t.brand);
   document.documentElement.style.setProperty('--brand-2', t.brand2);
 }
+const FONT_SCALES = {small:14, medium:15, large:17};
+function applyFontScale(){
+  document.body.style.fontSize = (FONT_SCALES[state.settings.fontScale]||15)+'px';
+}
+function setFontScale(scale){
+  state.settings.fontScale = scale;
+  save(); applyFontScale(); openPanel('appearance'); toast('اتغيّر حجم الخط');
+}
+function toggleShowDecimals(){
+  state.settings.showDecimals = !state.settings.showDecimals;
+  save(); renderAll(); openPanel('appearance');
+}
 function setAccentTheme(key){
   state.settings.accentTheme = key;
   save(); applyAccentTheme(); openPanel('appearance'); toast('اتغيّر لون التطبيق');
@@ -4372,6 +4592,16 @@ function appearancePanelHTML(){
     <div class="section-title">الوضع</div>
     <div class="card menu-list">
       <div class="m-item" onclick="toggleTheme()"><div class="m-icon">🌗</div><div class="m-text"><div class="m-title">فاتح / غامق</div><div class="m-sub">دلوقتي: ${state.settings.theme==='dark'?'غامق':'فاتح'}</div></div></div>
+    </div>
+    <div class="section-title">حجم الخط</div>
+    <div class="chip-select" style="padding:0 2px;">
+      <button type="button" class="${state.settings.fontScale==='small'?'sel':''}" onclick="setFontScale('small')">صغير</button>
+      <button type="button" class="${state.settings.fontScale==='medium'?'sel':''}" onclick="setFontScale('medium')">متوسط</button>
+      <button type="button" class="${state.settings.fontScale==='large'?'sel':''}" onclick="setFontScale('large')">كبير</button>
+    </div>
+    <div class="section-title">عرض الأرقام</div>
+    <div class="card menu-list">
+      <div class="m-item" onclick="toggleShowDecimals()"><div class="m-icon">#️⃣</div><div class="m-text"><div class="m-title">إظهار الكسور العشرية</div><div class="m-sub">${state.settings.showDecimals?'شغال (100.00)':'متوقف (100)'}</div></div></div>
     </div>
   `;
 }
@@ -4396,6 +4626,7 @@ if('serviceWorker' in navigator){
 function init(){
   load();
   applyAccentTheme();
+  applyFontScale();
   processRecurring();
   if(state.settings.pin){ checkAppLock(); }
   renderAll();
