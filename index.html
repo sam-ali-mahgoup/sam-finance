@@ -1293,7 +1293,7 @@ function txRowHTML(t){
   }
   return `<div class="tx-row" onclick="openTxDetail('${t.id}')">
     <div class="tx-icon" style="background:${bg};">${icon}</div>
-    <div class="tx-mid"><div class="tx-title">${esc(title)}</div><div class="tx-sub">${esc(sub)}</div>${t.tags&&t.tags.length?`<div class="tx-tags">${t.tags.map(tg=>`<span class="tag-chip">#${esc(tg)}</span>`).join('')}</div>`:''}</div>
+    <div class="tx-mid"><div class="tx-title">${esc(title)}${t.splitGroupId?' <span class="tag-chip" style="color:var(--gold);background:color-mix(in srgb, var(--gold) 15%, transparent);">مقسّمة</span>':''}</div><div class="tx-sub">${esc(sub)}</div>${t.tags&&t.tags.length?`<div class="tx-tags">${t.tags.map(tg=>`<span class="tag-chip">#${esc(tg)}</span>`).join('')}</div>`:''}</div>
     <div class="tx-amount money ${amtClass}">${amtText}</div>
   </div>`;
 }
@@ -4076,6 +4076,8 @@ function exportWalletStatement(walletId){
    ========================================================================= */
 function openTxForm(prefType){
   const type = prefType||'expense';
+  txPayMode = 'single';
+  txSplitRows = [];
   openModal(txFormHTML(type));
   bindTxTypeSwitch();
   if(type!=='transfer') renderPlaceSuggestions();
@@ -4116,11 +4118,26 @@ function txFormBodyHTML(type, ex){
     `;
   }
   const cats = state.categories.filter(c=>c.type===type);
+  const showSplitOption = type==='expense' && !ex;
   return `
-    <div class="field"><label>المبلغ</label><input id="txAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00 (اكتب حساب زي 150+80)" style="font-size:22px;font-weight:800;text-align:center;" onblur="evalCalcField(this)"></div>
-    <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="txWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'txWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+    ${showSplitOption?`<div class="field"><label>الدفع من</label>
+      <div class="type-toggle" id="txPayMode">
+        <button type="button" class="active" data-t="single" onclick="toggleType(this,'txPayMode');togglePayMode('single')">محفظة واحدة</button>
+        <button type="button" data-t="split" onclick="toggleType(this,'txPayMode');togglePayMode('split')">أكتر من محفظة</button>
+      </div>
+    </div>`:''}
+    <div id="txSingleSection">
+      <div class="field"><label>المبلغ</label><input id="txAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00 (اكتب حساب زي 150+80)" style="font-size:22px;font-weight:800;text-align:center;" onblur="evalCalcField(this)"></div>
+      <div class="field"><label>المحفظة</label>
+        <div class="chip-select" id="txWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'txWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      </div>
     </div>
+    ${showSplitOption?`<div id="txSplitSection" style="display:none;">
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">قسّم مبلغ الحركة على أكتر من محفظة (مثلاً جزء كاش وجزء فيزا)</div>
+      <div id="splitRowsWrap"></div>
+      <button type="button" class="btn-secondary" style="margin-top:4px;" onclick="addTxSplitRow()">+ ضيف محفظة</button>
+      <div id="splitTotalPreview" style="margin-top:12px;"></div>
+    </div>`:''}
     <div class="field"><label>التصنيف</label>
       <div class="chip-select" id="txCatChips">${cats.map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'txCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
     </div>
@@ -4143,7 +4160,50 @@ function switchTxType(type){
   document.querySelectorAll('#txType button').forEach(b=>b.classList.toggle('active', b.dataset.t===type));
   document.getElementById('txFormBody').innerHTML = txFormBodyHTML(type);
   if(type!=='transfer') renderPlaceSuggestions();
+  txSplitRows = [];
+  txPayMode = 'single';
 }
+let txPayMode = 'single';
+let txSplitRows = [];
+function togglePayMode(mode){
+  txPayMode = mode;
+  document.getElementById('txSingleSection').style.display = mode==='single'?'block':'none';
+  document.getElementById('txSplitSection').style.display = mode==='split'?'block':'none';
+  if(mode==='split' && txSplitRows.length===0){
+    const w = sortedWallets();
+    txSplitRows = [{walletId:w[0]?.id||'', amount:''},{walletId:w[1]?.id||w[0]?.id||'', amount:''}];
+    renderTxSplitRows();
+  }
+}
+function renderTxSplitRows(){
+  const wrap = document.getElementById('splitRowsWrap');
+  if(!wrap) return;
+  wrap.innerHTML = txSplitRows.map((row,i)=>`
+    <div class="row2" style="margin-bottom:8px;align-items:center;">
+      <select onchange="txSplitRows[${i}].walletId=this.value;updateSplitTotal();" style="flex:1;">
+        ${sortedWallets().map(w=>`<option value="${w.id}" ${row.walletId===w.id?'selected':''}>${w.icon} ${esc(w.name)}</option>`).join('')}
+      </select>
+      <input type="text" inputmode="decimal" value="${row.amount}" placeholder="0.00" style="width:100px;" onblur="evalCalcField(this)" oninput="txSplitRows[${i}].amount=this.value;updateSplitTotal();">
+      ${txSplitRows.length>2?`<button type="button" class="icon-btn" style="width:36px;height:36px;flex-shrink:0;" onclick="removeTxSplitRow(${i})">✕</button>`:''}
+    </div>`).join('');
+  updateSplitTotal();
+}
+function addTxSplitRow(){
+  const w = sortedWallets();
+  txSplitRows.push({walletId:w[0]?.id||'', amount:''});
+  renderTxSplitRows();
+}
+function removeTxSplitRow(i){
+  txSplitRows.splice(i,1);
+  renderTxSplitRows();
+}
+function updateSplitTotal(){
+  const wrap = document.getElementById('splitTotalPreview');
+  if(!wrap) return;
+  const total = txSplitRows.reduce((s,r)=>s+(parseFloat(r.amount)||0),0);
+  wrap.innerHTML = `<div class="card"><div class="bm-top"><span>إجمالي الحركة</span><span class="money" style="font-weight:800;font-size:16px;">${fmt(total)} ${state.settings.baseCurrency}</span></div></div>`;
+}
+
 function renderPlaceSuggestions(){
   const input = document.getElementById('txPlaceInput');
   const wrap = document.getElementById('txPlaceChips');
@@ -4192,6 +4252,21 @@ function saveTx(id){
     const obj = {type:'transfer', walletId:fromId, toWalletId:toId, amount, toAmount, date, note};
     if(id){ Object.assign(state.transactions.find(t=>t.id===id), obj); }
     else { state.transactions.push({id:uid(), ...obj}); }
+  } else if(type==='expense' && txPayMode==='split' && !id){
+    const cSel = document.getElementById('txCatChips').querySelector('.sel');
+    const note = document.getElementById('txNote').value.trim();
+    const tagsRaw = document.getElementById('txTags')?.value || '';
+    const tags = tagsRaw.split(/[،,]/).map(s=>s.trim()).filter(Boolean);
+    const placeInput = document.getElementById('txPlaceInput')?.value || '';
+    const placeId = resolveMerchant(placeInput);
+    if(!cSel){ toast('اختار تصنيف'); return; }
+    const rows = txSplitRows.filter(r=>r.walletId && parseFloat(r.amount)>0);
+    if(rows.length<2){ toast('محتاج محفظتين على الأقل بمبالغ صحيحة'); return; }
+    const groupId = uid();
+    rows.forEach(r=>{
+      state.transactions.push({id:uid(), type:'expense', walletId:r.walletId, categoryId:cSel.dataset.cat, amount:parseFloat(r.amount), note, date, tags, placeId, splitGroupId:groupId});
+    });
+    txSplitRows = []; txPayMode='single';
   } else {
     const amount = parseFloat(document.getElementById('txAmount').value);
     const wSel = document.getElementById('txWalletChips').querySelector('.sel');
