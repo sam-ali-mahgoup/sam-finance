@@ -517,7 +517,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
   <!-- ================= DASHBOARD ================= -->
   <div class="view active" id="view-dashboard">
     <div class="hero-card">
-      <div class="hero-label">إجمالي رصيدك (<span id="baseCurLabel">EGP</span>)</div>
+      <div class="hero-label">إجمالي رصيدك (<span id="baseCurLabel">EGP</span>) <span id="viewCurBadge" onclick="cycleViewCurrency(event)" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;"></span></div>
       <div class="hero-amount money skeleton" id="heroTotal">0000000</div>
       <div id="netWorthLine"></div>
       <div class="hero-sub">
@@ -1162,13 +1162,29 @@ function currentMonthRange(){
   return {start,end};
 }
 
+let dashboardViewCurrency = null;
+function cycleViewCurrency(e){
+  if(e) e.stopPropagation();
+  const currencies = Object.keys(state.settings.rates).filter(c=>c!==state.settings.baseCurrency);
+  if(currencies.length===0) return;
+  if(!dashboardViewCurrency){ dashboardViewCurrency = currencies[0]; }
+  else {
+    const idx = currencies.indexOf(dashboardViewCurrency);
+    dashboardViewCurrency = idx===-1 || idx===currencies.length-1 ? null : currencies[idx+1];
+  }
+  renderDashboard();
+}
 function renderDashboard(){
   document.getElementById('baseCurLabel').textContent = state.settings.baseCurrency;
   document.getElementById('baseCurMenuLabel').textContent = state.settings.baseCurrency;
   document.getElementById('heroTotal').classList.remove('skeleton');
   document.getElementById('heroIncome').classList.remove('skeleton');
   document.getElementById('heroExpense').classList.remove('skeleton');
-  document.getElementById('heroTotal').innerHTML = fmt(totalBaseBalance())+ ' <span>'+state.settings.baseCurrency+'</span>';
+  const viewCur = dashboardViewCurrency || state.settings.baseCurrency;
+  const displayTotal = dashboardViewCurrency ? convertAmount(totalBaseBalance(), state.settings.baseCurrency, dashboardViewCurrency) : totalBaseBalance();
+  document.getElementById('heroTotal').innerHTML = fmt(displayTotal)+ ' <span>'+viewCur+'</span>';
+  const viewBadge = document.getElementById('viewCurBadge');
+  if(viewBadge) viewBadge.textContent = dashboardViewCurrency ? '· بص بالـ '+dashboardViewCurrency+' 🔄' : '👁️';
   const nwLine = document.getElementById('netWorthLine');
   if(nwLine){
     if(state.assets.length>0){
@@ -1228,14 +1244,21 @@ function renderDashboard(){
     </div>`;
   } else lowWrap.innerHTML='';
 
-  // recurring alert
-  const upcoming = upcomingRecurringWithin(7);
+  // recurring alert with countdown to nearest bill
+  const upcoming = upcomingRecurringWithin(14);
   const alertWrap = document.getElementById('recurringAlertWrap');
   if(upcoming.length>0){
-    alertWrap.innerHTML = `<div class="card" style="margin-top:12px;background:linear-gradient(120deg,var(--card),${document.documentElement.getAttribute('data-theme')==='light'?'#F7EEDB':'#241C10'});border-color:var(--gold-dim);">
+    const nearest = upcoming.slice().sort((a,b)=>a.nextDate.localeCompare(b.nextDate))[0];
+    const daysLeft = Math.max(0, Math.round((new Date(nearest.nextDate+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000));
+    const countdownLabel = daysLeft===0?'النهاردة':(daysLeft===1?'بكرة':`بعد ${daysLeft} يوم`);
+    const restCount = upcoming.length-1;
+    alertWrap.innerHTML = `<div class="card" style="margin-top:12px;background:linear-gradient(120deg,var(--card),${document.documentElement.getAttribute('data-theme')==='light'?'#F7EEDB':'#241C10'});border-color:var(--gold-dim);" onclick="switchView('more');openPanel('recurring');">
       <div style="display:flex;gap:10px;align-items:center;">
-        <div style="font-size:20px;">🔔</div>
-        <div style="font-size:13px;font-weight:700;">عندك ${upcoming.length} حركة متكررة هتتخصم خلال 7 أيام</div>
+        <div style="font-size:20px;">⏳</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:800;">${esc(nearest.name)} ${countdownLabel}</div>
+          <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;" class="money">${fmt(nearest.amount)} ${state.settings.baseCurrency}${restCount>0?` · +${restCount} حركة تانية قريبة`:''}</div>
+        </div>
       </div>
     </div>`;
   } else alertWrap.innerHTML='';
@@ -4118,9 +4141,9 @@ function txFormBodyHTML(type, ex){
     `;
   }
   const cats = state.categories.filter(c=>c.type===type);
-  const showSplitOption = type==='expense' && !ex;
+  const showSplitOption = (type==='expense' || type==='income') && !ex;
   return `
-    ${showSplitOption?`<div class="field"><label>الدفع من</label>
+    ${showSplitOption?`<div class="field"><label>${type==='income'?'استلمت في':'الدفع من'}</label>
       <div class="type-toggle" id="txPayMode">
         <button type="button" class="active" data-t="single" onclick="toggleType(this,'txPayMode');togglePayMode('single')">محفظة واحدة</button>
         <button type="button" data-t="split" onclick="toggleType(this,'txPayMode');togglePayMode('split')">أكتر من محفظة</button>
@@ -4133,7 +4156,7 @@ function txFormBodyHTML(type, ex){
       </div>
     </div>
     ${showSplitOption?`<div id="txSplitSection" style="display:none;">
-      <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">قسّم مبلغ الحركة على أكتر من محفظة (مثلاً جزء كاش وجزء فيزا)</div>
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">${type==='income'?'قسّم المبلغ المستلم على أكتر من محفظة (مثلاً نص كاش ونص تحويل بنكي)':'قسّم مبلغ الحركة على أكتر من محفظة (مثلاً جزء كاش وجزء فيزا)'}</div>
       <div id="splitRowsWrap"></div>
       <button type="button" class="btn-secondary" style="margin-top:4px;" onclick="addTxSplitRow()">+ ضيف محفظة</button>
       <div id="splitTotalPreview" style="margin-top:12px;"></div>
@@ -4252,7 +4275,7 @@ function saveTx(id){
     const obj = {type:'transfer', walletId:fromId, toWalletId:toId, amount, toAmount, date, note};
     if(id){ Object.assign(state.transactions.find(t=>t.id===id), obj); }
     else { state.transactions.push({id:uid(), ...obj}); }
-  } else if(type==='expense' && txPayMode==='split' && !id){
+  } else if((type==='expense'||type==='income') && txPayMode==='split' && !id){
     const cSel = document.getElementById('txCatChips').querySelector('.sel');
     const note = document.getElementById('txNote').value.trim();
     const tagsRaw = document.getElementById('txTags')?.value || '';
@@ -4264,7 +4287,7 @@ function saveTx(id){
     if(rows.length<2){ toast('محتاج محفظتين على الأقل بمبالغ صحيحة'); return; }
     const groupId = uid();
     rows.forEach(r=>{
-      state.transactions.push({id:uid(), type:'expense', walletId:r.walletId, categoryId:cSel.dataset.cat, amount:parseFloat(r.amount), note, date, tags, placeId, splitGroupId:groupId});
+      state.transactions.push({id:uid(), type, walletId:r.walletId, categoryId:cSel.dataset.cat, amount:parseFloat(r.amount), note, date, tags, placeId, splitGroupId:groupId});
     });
     txSplitRows = []; txPayMode='single';
   } else {
