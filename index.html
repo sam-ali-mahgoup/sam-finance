@@ -1904,12 +1904,12 @@ function renderCashDigitalRatio(){
   const cashPct = (cash/total)*100;
   host.innerHTML = `<div class="card" style="margin-top:10px;">
     <div style="font-weight:800;font-size:13.5px;margin-bottom:10px;">💵 كاش مقابل 💳 رقمي</div>
-    ${unclassified>0?`<div style="font-size:10.5px;color:var(--gold);margin-bottom:8px;">⚠️ ${fmt(unclassified)} من محافظ لسه مش محددة النوع، مش داخلة في الحساب ده</div>`:''}
+    ${unclassified>0?`<div style="font-size:10.5px;color:var(--gold);margin-bottom:8px;" class="money">⚠️ ${fmt(unclassified)} من محافظ لسه مش محددة النوع، مش داخلة في الحساب ده</div>`:''}
     <div class="bm-track" style="height:14px;display:flex;overflow:hidden;">
       <div style="width:${cashPct}%;background:var(--gold);"></div>
       <div style="width:${100-cashPct}%;background:var(--blue);"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;">
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;" class="money">
       <span>💵 كاش ${cashPct.toFixed(0)}% (${fmt(cash)})</span>
       <span>💳 رقمي ${(100-cashPct).toFixed(0)}% (${fmt(digital)})</span>
     </div>
@@ -3736,9 +3736,9 @@ function render503020(){
   const needs = val*0.5, wants = val*0.3, save20 = val*0.2;
   wrap.innerHTML = `
     <div class="stat-grid">
-      <div class="stat-box"><div class="sv" style="color:var(--blue);">${fmt(needs)}</div><div class="sl">احتياجات (50%)</div></div>
-      <div class="stat-box"><div class="sv" style="color:var(--gold);">${fmt(wants)}</div><div class="sl">رغبات (30%)</div></div>
-      <div class="stat-box"><div class="sv" style="color:var(--brand-2);">${fmt(save20)}</div><div class="sl">ادخار (20%)</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--blue);">${fmt(needs)}</div><div class="sl">احتياجات (50%)</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--gold);">${fmt(wants)}</div><div class="sl">رغبات (30%)</div></div>
+      <div class="stat-box"><div class="sv money" style="color:var(--brand-2);">${fmt(save20)}</div><div class="sl">ادخار (20%)</div></div>
     </div>`;
 }
 
@@ -4139,7 +4139,8 @@ function zakatPanelHTML(){
   const cashTotal = totalBaseBalance();
   const goldAssetsTotal = state.assets.filter(a=>a.isGold).reduce((s,a)=>s+assetValueOf(a),0);
   const otherAssetsTotal = state.assets.filter(a=>!a.isGold).reduce((s,a)=>s+toBase(a.value,a.currency),0);
-  const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0)
+    + state.installments.reduce((s,ins)=> s + Math.max(0,(ins.numInstallments-ins.paidCount)*ins.installmentAmount), 0);
   const zakatableWealth = Math.max(0, cashTotal + goldAssetsTotal + otherAssetsTotal - debtsOwed);
   const aboveNisab = pricePerGram24k>0 && zakatableWealth >= nisabValue;
   const zakatDue = aboveNisab ? zakatableWealth * 0.025 : 0;
@@ -4154,7 +4155,7 @@ function zakatPanelHTML(){
       <div class="bm-top"><span>كاش ومحافظ</span><span class="money">${fmt(cashTotal)}</span></div>
       <div class="bm-top" style="margin-top:6px;"><span>أصول دهب</span><span class="money">${fmt(goldAssetsTotal)}</span></div>
       <div class="bm-top" style="margin-top:6px;"><span>أصول تانية</span><span class="money">${fmt(otherAssetsTotal)}</span></div>
-      <div class="bm-top" style="margin-top:6px;"><span>ناقص: ديون عليك</span><span class="money" style="color:var(--red);">-${fmt(debtsOwed)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>ناقص: ديون وأقساط عليك</span><span class="money" style="color:var(--red);">-${fmt(debtsOwed)}</span></div>
     </div>
     <div class="card" style="margin-top:14px;background:${aboveNisab?'rgba(79,209,165,.1)':'var(--bg-elev-2)'};border-color:${aboveNisab?'var(--brand-2)':'var(--border)'};text-align:center;padding:20px;">
       ${aboveNisab?`
