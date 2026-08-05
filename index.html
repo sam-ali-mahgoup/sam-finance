@@ -874,10 +874,9 @@ function catChipLabel(c){
   return `${c.icon} ${esc(c.name)}`;
 }
 function convertAmount(amount, fromCurrency, toCurrency){
-  const base = toBase(amount, fromCurrency);
-  const r = state.settings.rates[toCurrency] || 1;
-  const baseR = state.settings.rates[state.settings.baseCurrency] || 1;
-  return base * (r/baseR);
+  const baseAmount = toBase(amount, fromCurrency);
+  const rToCur = state.settings.rates[toCurrency] || 1;
+  return baseAmount / rToCur;
 }
 
 /* ---- Live exchange rates (auto-update, no manual editing needed) ---- */
@@ -1176,13 +1175,27 @@ function currentMonthRange(){
 let dashboardViewCurrency = null;
 function cycleViewCurrency(e){
   if(e) e.stopPropagation();
-  const currencies = Object.keys(state.settings.rates).filter(c=>c!==state.settings.baseCurrency);
-  if(currencies.length===0) return;
-  if(!dashboardViewCurrency){ dashboardViewCurrency = currencies[0]; }
-  else {
-    const idx = currencies.indexOf(dashboardViewCurrency);
-    dashboardViewCurrency = idx===-1 || idx===currencies.length-1 ? null : currencies[idx+1];
-  }
+  openModal(`
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">اعرض رصيدك بعملة إيه؟</div>
+    <div class="card menu-list">
+      <div class="m-item" onclick="chooseViewCurrency(null)">
+        <div class="m-icon">⭐</div>
+        <div class="m-text"><div class="m-title">${state.settings.baseCurrency} (الأساسية)</div></div>
+        ${!dashboardViewCurrency?'<div style="color:var(--brand-2);font-weight:800;">✓</div>':''}
+      </div>
+      ${Object.keys(state.settings.rates).filter(c=>c!==state.settings.baseCurrency).map(c=>`
+        <div class="m-item" onclick="chooseViewCurrency('${c}')">
+          <div class="m-icon">💱</div>
+          <div class="m-text"><div class="m-title">${c}</div></div>
+          ${dashboardViewCurrency===c?'<div style="color:var(--brand-2);font-weight:800;">✓</div>':''}
+        </div>`).join('')}
+    </div>
+  `);
+}
+function chooseViewCurrency(cur){
+  dashboardViewCurrency = cur;
+  closeModal();
   renderDashboard();
 }
 function renderDashboard(){
@@ -1195,7 +1208,7 @@ function renderDashboard(){
   const displayTotal = dashboardViewCurrency ? convertAmount(totalBaseBalance(), state.settings.baseCurrency, dashboardViewCurrency) : totalBaseBalance();
   document.getElementById('heroTotal').innerHTML = fmt(displayTotal)+ ' <span>'+viewCur+'</span>';
   const viewBadge = document.getElementById('viewCurBadge');
-  if(viewBadge) viewBadge.textContent = dashboardViewCurrency ? '· بص بالـ '+dashboardViewCurrency+' 🔄' : '👁️';
+  if(viewBadge) viewBadge.textContent = dashboardViewCurrency ? '· بالـ '+dashboardViewCurrency+' ▾' : '👁️ اعرض بعملة تانية';
   const nwLine = document.getElementById('netWorthLine');
   if(nwLine){
     if(state.assets.length>0){
