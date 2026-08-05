@@ -762,7 +762,11 @@ function load(){
   if(!state.merchants) state.merchants = [];
   if(!state.installments) state.installments = [];
   if(!state.weeklyChallenge) state.weeklyChallenge = {target:null, weekStart:null};
-  state.wallets.forEach(w=>{ if(w.archived===undefined) w.archived = false; if(w.walletType===undefined) w.walletType = 'digital'; });
+  state.wallets.forEach(w=>{ if(w.archived===undefined) w.archived = false; if(w.walletType===undefined) w.walletType = null; });
+  if(!state.settings.walletTypeResetApplied){
+    state.settings.walletTypeResetApplied = true;
+    state.wallets.forEach(w=>{ w.walletType = null; });
+  }
   state.transactions.forEach(t=>{ if(t.placeId===undefined) t.placeId = null; });
   if(state.settings.ratesAutoUpdate===undefined) state.settings.ratesAutoUpdate = true;
   if(state.settings.ratesLastUpdated===undefined) state.settings.ratesLastUpdated = null;
@@ -1214,7 +1218,9 @@ function renderDashboard(){
     if(state.assets.length>0){
       const assetsTotal = totalAssetsBase();
       const netWorth = totalBaseBalance() + assetsTotal;
-      nwLine.innerHTML = `<div class="networth-line money" onclick="switchView('more');openPanel('assets');">💎 أصول ${fmt(assetsTotal)} · الإجمالي الكلي ${fmt(netWorth)} ${state.settings.baseCurrency}</div>`;
+      const dAssets = dashboardViewCurrency ? convertAmount(assetsTotal, state.settings.baseCurrency, dashboardViewCurrency) : assetsTotal;
+      const dNetWorth = dashboardViewCurrency ? convertAmount(netWorth, state.settings.baseCurrency, dashboardViewCurrency) : netWorth;
+      nwLine.innerHTML = `<div class="networth-line money" onclick="switchView('more');openPanel('assets');">💎 أصول ${fmt(dAssets)} · الإجمالي الكلي ${fmt(dNetWorth)} ${viewCur}</div>`;
     } else nwLine.innerHTML = '';
   }
 
@@ -1455,6 +1461,12 @@ function renderWallets(){
   if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك'); return; }
   const active = state.wallets.filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
   const archived = state.wallets.filter(w=>w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+  const unclassified = active.filter(w=>!w.walletType);
+  const classifyBanner = unclassified.length>0 ? `<div class="card" style="border-color:var(--gold);margin-bottom:12px;">
+    <div style="font-weight:800;font-size:13px;margin-bottom:6px;">🏷️ حدد نوع محافظك</div>
+    <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">عشان تقرير "كاش مقابل رقمي" يبقى دقيق، دوس على كل محفظة تحت وحدد كاش ولا رقمية:</div>
+    ${unclassified.map(w=>`<button type="button" class="btn-secondary" style="margin-top:6px;text-align:right;" onclick="openWalletForm('${w.id}')">${w.icon} ${esc(w.name)} — دوس تحدد النوع</button>`).join('')}
+  </div>` : '';
   const hint = active.length>1 ? `<div style="font-size:11.5px;color:var(--ink-faint);text-align:center;margin-bottom:10px;">رتّب محافظك بالأسهم ▲▼ أو امسك ⠿ واسحب</div>` : '';
   const activeHTML = active.map((w,i)=>`
     <div class="wallet-card" data-wid="${w.id}">
@@ -1485,7 +1497,7 @@ function renderWallets(){
           <div><div class="wc-bal-lg money">${fmt(walletBalance(w.id))}</div></div>
         </div>
       </div>`).join('')}`;
-  wrap.innerHTML = hint + activeHTML + archivedHTML;
+  wrap.innerHTML = classifyBanner + hint + activeHTML + archivedHTML;
   initWalletDrag();
 }
 function moveWalletOrder(id, dir){
@@ -1871,19 +1883,22 @@ function renderCashDigitalRatio(){
   const host = document.getElementById('cashDigitalCard');
   if(!host) return;
   const {start,end} = periodRange();
-  let cash=0, digital=0;
+  let cash=0, digital=0, unclassified=0;
   state.transactions.forEach(t=>{
     if(t.type!=='expense'||t.date<start||t.date>end) return;
     const w = walletById(t.walletId);
     if(!w) return;
     const v = toBase(t.amount,w.currency);
-    if(w.walletType==='cash') cash+=v; else digital+=v;
+    if(w.walletType==='cash') cash+=v;
+    else if(w.walletType==='digital') digital+=v;
+    else unclassified+=v;
   });
   const total = cash+digital;
   if(total<=0){ host.innerHTML=''; return; }
   const cashPct = (cash/total)*100;
   host.innerHTML = `<div class="card" style="margin-top:10px;">
     <div style="font-weight:800;font-size:13.5px;margin-bottom:10px;">💵 كاش مقابل 💳 رقمي</div>
+    ${unclassified>0?`<div style="font-size:10.5px;color:var(--gold);margin-bottom:8px;">⚠️ ${fmt(unclassified)} من محافظ لسه مش محددة النوع، مش داخلة في الحساب ده</div>`:''}
     <div class="bm-track" style="height:14px;display:flex;overflow:hidden;">
       <div style="width:${cashPct}%;background:var(--gold);"></div>
       <div style="width:${100-cashPct}%;background:var(--blue);"></div>
@@ -4202,9 +4217,10 @@ function openWalletForm(id){
     </div>
     <div class="field"><label>نوع المحفظة</label>
       <div class="type-toggle" id="wType">
-        <button type="button" class="${(!ex||ex.walletType==='cash')?'active':''}" data-t="cash" onclick="toggleType(this,'wType')">💵 كاش</button>
+        <button type="button" class="${ex?(ex.walletType==='cash'?'active':''):'active'}" data-t="cash" onclick="toggleType(this,'wType')">💵 كاش</button>
         <button type="button" class="${ex&&ex.walletType==='digital'?'active':''}" data-t="digital" onclick="toggleType(this,'wType')">💳 رقمي (بنك/محفظة إلكترونية)</button>
       </div>
+      ${ex&&!ex.walletType?`<div style="font-size:11px;color:var(--gold);margin-top:6px;">⚠️ لسه محدّدتش نوع المحفظة دي، اختار وادوس حفظ</div>`:''}
     </div>
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="wIconGrid">${WALLET_ICONS.map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':''}" data-i="${ic}" onclick="selectIcon2(this,'wIconGrid')">${ic}</button>`).join('')}</div></div>
     <div class="field"><label>اللون</label><div class="color-grid" id="wColorGrid">${COLORS.map(c=>`<button type="button" class="${ex&&ex.color===c?'sel':''}" data-c="${c}" style="background:${c};" onclick="selectColor(this)"></button>`).join('')}</div></div>
@@ -4560,24 +4576,31 @@ function toggleTheme(){
   state.settings.theme = state.settings.theme==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
+  applyAccentTheme();
   save();
 }
 
 const ACCENT_THEMES = {
-  green:  {label:'أخضر (افتراضي)', brand:'#1F8A70', brand2:'#4FD1A5'},
-  blue:   {label:'أزرق',            brand:'#2F6FA6', brand2:'#5AA9E6'},
-  purple: {label:'بنفسجي',          brand:'#6B4FA0', brand2:'#9C7FD1'},
-  coral:  {label:'كورال',           brand:'#C24734', brand2:'#E8836A'},
-  gold:   {label:'ذهبي',            brand:'#B9853A', brand2:'#D9BE8E'},
+  green:  {label:'أخضر (افتراضي)', dark:{brand:'#1F8A70', brand2:'#4FD1A5'}, light:{brand:'#1F8A70', brand2:'#17705A'}},
+  blue:   {label:'أزرق',            dark:{brand:'#2F6FA6', brand2:'#5AA9E6'}, light:{brand:'#2F6FA6', brand2:'#1F4F7A'}},
+  purple: {label:'بنفسجي',          dark:{brand:'#6B4FA0', brand2:'#9C7FD1'}, light:{brand:'#6B4FA0', brand2:'#523A7A'}},
+  coral:  {label:'كورال',           dark:{brand:'#C24734', brand2:'#E8836A'}, light:{brand:'#C24734', brand2:'#9C3A29'}},
+  gold:   {label:'ذهبي',            dark:{brand:'#B9853A', brand2:'#D9BE8E'}, light:{brand:'#B9853A', brand2:'#8F6A2E'}},
+  teal:   {label:'تركواز',          dark:{brand:'#1F8A93', brand2:'#4FD1D6'}, light:{brand:'#1F8A93', brand2:'#166970'}},
+  rose:   {label:'وردي',            dark:{brand:'#B03A66', brand2:'#E87FA8'}, light:{brand:'#B03A66', brand2:'#872C4E'}},
+  slate:  {label:'رمادي داكن',      dark:{brand:'#4A5A6A', brand2:'#8FA3B5'}, light:{brand:'#4A5A6A', brand2:'#37444F'}},
 };
 function applyAccentTheme(){
   const t = ACCENT_THEMES[state.settings.accentTheme] || ACCENT_THEMES.green;
-  document.documentElement.style.setProperty('--brand', t.brand);
-  document.documentElement.style.setProperty('--brand-2', t.brand2);
+  const variant = state.settings.theme==='light' ? t.light : t.dark;
+  [document.documentElement, document.body].forEach(el=>{
+    el.style.setProperty('--brand', variant.brand);
+    el.style.setProperty('--brand-2', variant.brand2);
+  });
 }
-const FONT_SCALES = {small:14, medium:15, large:17};
+const FONT_SCALES = {small:0.9, medium:1, large:1.15};
 function applyFontScale(){
-  document.body.style.fontSize = (FONT_SCALES[state.settings.fontScale]||15)+'px';
+  document.body.style.zoom = FONT_SCALES[state.settings.fontScale]||1;
 }
 function setFontScale(scale){
   state.settings.fontScale = scale;
@@ -4595,12 +4618,14 @@ function appearancePanelHTML(){
   return `
     <div class="section-title" style="margin-top:0;">اللون الأساسي</div>
     <div class="card">
-      ${Object.entries(ACCENT_THEMES).map(([key,t])=>`
+      ${Object.entries(ACCENT_THEMES).map(([key,t])=>{
+        const v = state.settings.theme==='light' ? t.light : t.dark;
+        return `
         <div class="m-item" onclick="setAccentTheme('${key}')" style="cursor:pointer;">
-          <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,${t.brand},${t.brand2});flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);"></div>
+          <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,${v.brand},${v.brand2});flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);"></div>
           <div class="m-text"><div class="m-title">${t.label}</div></div>
           ${state.settings.accentTheme===key?'<div style="color:var(--brand-2);font-weight:800;">✓</div>':''}
-        </div>`).join('')}
+        </div>`;}).join('')}
     </div>
     <div class="section-title">الوضع</div>
     <div class="card menu-list">
