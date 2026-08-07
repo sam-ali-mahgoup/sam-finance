@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="SAM Finance">
 <meta name="mobile-web-app-capable" content="yes">
 <title>SAM Finance | مصاريفي</title>
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23146356'/%3E%3Ctext x='50' y='66' font-size='50' text-anchor='middle' fill='%23F2E9D8' font-family='Arial' font-weight='bold'%3E$%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%234FD1A5'/%3E%3Cstop offset='100%25' stop-color='%23146356'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Crect x='20' y='30' width='60' height='42' rx='9' fill='%23F2E9D8'/%3E%3Cpath d='M20 42 a9 9 0 0 1 9 -9 h42 a9 9 0 0 1 9 9 v6 h-60 z' fill='%230E1613' fill-opacity='0.18'/%3E%3Ccircle cx='64' cy='53' r='7' fill='%23146356'/%3E%3C/svg%3E">
 <link rel="manifest" href="./manifest.json">
 <style>
 :root{
@@ -42,7 +42,7 @@
   --border:#E3DCC8;
   --ink:#20281F;
   --ink-dim:#5C6459;
-  --ink-faint:#8A9184;
+  --ink-faint:#6B7268;
   --brand:#1F8A70;
   --brand-2:#17705A;
   --gold:#B9853A;
@@ -212,6 +212,7 @@ button{cursor:pointer;border:none;background:none;}
 .wallet-chip:active{transform:scale(.96);}
 .wallet-chip .wc-top{display:flex;justify-content:space-between;align-items:flex-start;}
 .quick-transfer-btn{width:24px;height:24px;border-radius:8px;background:var(--bg-elev-2);font-size:12px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}
+.attention-dot{position:absolute;top:-2px;left:-2px;width:9px;height:9px;border-radius:50%;background:var(--red);border:1.5px solid var(--bg-elev);}
 .wallet-chip .wc-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
 .wallet-chip .wc-name{font-size:12.5px;color:var(--ink-dim);margin-top:10px;font-weight:600;}
 .wallet-chip .wc-bal{font-size:17px;font-weight:800;margin-top:2px;direction:ltr;text-align:right;}
@@ -375,7 +376,16 @@ button{cursor:pointer;border:none;background:none;}
 
 /* ---------- REPORTS ---------- */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
-.stat-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;}
+.stat-box{
+  background:color-mix(in srgb, var(--card) 70%, transparent);
+  backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);
+  border:1px solid var(--border);border-radius:16px;padding:14px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.08), inset 0 -1px 0 rgba(255,255,255,.03);
+}
+.card-tip{
+  background:color-mix(in srgb, var(--gold) 8%, var(--card));
+  border-color:var(--gold);
+}
 .stat-box .sv{font-size:19px;font-weight:800;direction:ltr;}
 .stat-box .sl{font-size:11.5px;color:var(--ink-faint);margin-top:4px;font-weight:600;}
 .legend-row{display:flex;align-items:center;gap:9px;padding:8px 2px;}
@@ -433,7 +443,8 @@ button{cursor:pointer;border:none;background:none;}
 
 .day-group-label{font-size:12px;font-weight:700;color:var(--ink-faint);margin:16px 4px 6px;}
 .receipt-thumb{width:100%;border-radius:12px;margin-top:10px;max-height:180px;object-fit:cover;}
-.money{transition:filter .2s;}
+.money{transition:filter .2s;font-variant-numeric:tabular-nums;}
+.hero-amount,.wc-bal-lg,.wc-bal-base,.tx-amount,.sv,.debt-amt,.stat-box .sv{font-variant-numeric:tabular-nums;}
 body.privacy-on .money{filter:blur(7px);user-select:none;}
 .privacy-toggle-btn{position:relative;}
 .template-chip{
@@ -478,7 +489,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 </head>
 <body>
 <div id="splash">
-  <div class="splash-mark">S</div>
+  <div class="splash-mark">👛</div>
   <div class="splash-title">SAM Finance</div>
 </div>
 <div id="onboarding">
@@ -505,7 +516,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 
   <div class="topbar">
     <div class="brand">
-      <div class="brand-mark">S</div>
+      <div class="brand-mark">👛</div>
       <div class="brand-text">SAM Finance<small>مصاريفي</small></div>
     </div>
     <div class="topbar-actions">
@@ -528,22 +539,27 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
       <div id="streakBadge"></div>
     </div>
 
-    <div id="healthScoreCard"></div>
-    <div id="weeklyChallengeCard"></div>
+    <div id="recurringAlertWrap"></div>
+    <div id="lowBalanceAlertWrap"></div>
+
+    <div class="section-title">آخر الحركات <span class="link" onclick="switchView('transactions')">الكل ‹</span></div>
+    <div class="card" id="dashRecent"></div>
 
     <div class="section-title">محافظك <span class="link" onclick="switchView('wallets')">كل المحافظ ‹</span></div>
     <div class="wallets-scroll" id="dashWallets"></div>
 
-    <div id="templatesQuickWrap"></div>
-
-    <div id="recurringAlertWrap"></div>
-    <div id="lowBalanceAlertWrap"></div>
-
     <div class="section-title">الميزانية الشهرية <span class="link" onclick="switchView('more');openPanel('budgets')">التفاصيل ‹</span></div>
     <div class="card" id="dashBudgets"></div>
 
-    <div class="section-title">آخر الحركات <span class="link" onclick="switchView('transactions')">الكل ‹</span></div>
-    <div class="card" id="dashRecent"></div>
+    <div id="templatesQuickWrap"></div>
+
+    <div class="section-title" onclick="toggleStatsSection()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+      <span>إحصائيات وتحفيز</span><span id="statsChevron" style="font-size:11px;">▾</span>
+    </div>
+    <div id="statsSection" style="display:none;">
+      <div id="healthScoreCard"></div>
+      <div id="weeklyChallengeCard"></div>
+    </div>
   </div>
 
   <!-- ================= WALLETS ================= -->
@@ -670,7 +686,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
   <button class="nav-btn" data-v="wallets" onclick="switchView('wallets')"><div class="ni">👛</div>المحافظ</button>
   <button class="nav-btn" data-v="transactions" onclick="switchView('transactions')"><div class="ni">📋</div>الحركات</button>
   <button class="nav-btn" data-v="reports" onclick="switchView('reports')"><div class="ni">📊</div>التقارير</button>
-  <button class="nav-btn" data-v="more" onclick="switchView('more')"><div class="ni">⚙️</div>المزيد</button>
+  <button class="nav-btn" data-v="more" onclick="switchView('more')"><div class="ni" style="position:relative;">⚙️<span id="moreAttentionDot" class="attention-dot" style="display:none;"></span></div>المزيد</button>
 </div>
 
 <!-- ============ MODAL: overlay host, content injected ============ -->
@@ -773,7 +789,7 @@ function load(){
   if(state.settings.ratesLastUpdated===undefined) state.settings.ratesLastUpdated = null;
   if(state.settings.autoLockOnBackground===undefined) state.settings.autoLockOnBackground = true;
   state.wallets.forEach(w=>{ if(w.lowBalanceAlert===undefined) w.lowBalanceAlert = null; });
-  state.categories.forEach(c=>{ if(c.parentId===undefined) c.parentId = null; });
+  state.categories.forEach((c,i)=>{ if(c.parentId===undefined) c.parentId = null; if(!c.color) c.color = COLORS[i%COLORS.length]; });
   const requiredCats = [
     {id:'cat_debt_in',name:'دين مقبوض',icon:'🤝',type:'income'},
     {id:'cat_debt_out',name:'سداد/إقراض',icon:'🤝',type:'expense'},
@@ -794,6 +810,7 @@ function load(){
   if(state.settings.faceIdCredentialId===undefined) state.settings.faceIdCredentialId = null;
   if(state.settings.onboardingSeen===undefined) state.settings.onboardingSeen = false;
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
+  if(state.settings.statsSectionExpanded===undefined) state.settings.statsSectionExpanded = false;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
   if(state.settings.fontScale===undefined) state.settings.fontScale = 'medium';
   if(!state.settings.customColors || !state.settings.customColors.dark || !state.settings.customColors.light){
@@ -1208,15 +1225,49 @@ function chooseViewCurrency(cur){
   closeModal();
   renderDashboard();
 }
+function toggleStatsSection(){
+  state.settings.statsSectionExpanded = !state.settings.statsSectionExpanded;
+  save();
+  const sec = document.getElementById('statsSection');
+  const chev = document.getElementById('statsChevron');
+  if(sec) sec.style.display = state.settings.statsSectionExpanded ? 'block' : 'none';
+  if(chev) chev.textContent = state.settings.statsSectionExpanded ? '▴' : '▾';
+}
+let lastHeroTotalValue = null;
+function animateHeroTotal(target, currencyLabel){
+  const el = document.getElementById('heroTotal');
+  if(!el) return;
+  if(lastHeroTotalValue===null || Math.abs(target-lastHeroTotalValue)<0.01){
+    lastHeroTotalValue = target;
+    el.innerHTML = fmt(target)+ ' <span>'+currencyLabel+'</span>';
+    return;
+  }
+  const start = lastHeroTotalValue;
+  const startTime = performance.now();
+  const duration = 500;
+  function step(now){
+    const p = Math.min(1, (now-startTime)/duration);
+    const eased = 1 - Math.pow(1-p, 3);
+    const val = start + (target-start)*eased;
+    el.innerHTML = fmt(val)+ ' <span>'+currencyLabel+'</span>';
+    if(p<1) requestAnimationFrame(step);
+    else lastHeroTotalValue = target;
+  }
+  requestAnimationFrame(step);
+}
 function renderDashboard(){
   document.getElementById('baseCurLabel').textContent = state.settings.baseCurrency;
   document.getElementById('baseCurMenuLabel').textContent = state.settings.baseCurrency;
   document.getElementById('heroTotal').classList.remove('skeleton');
+  const statsSec = document.getElementById('statsSection');
+  const statsChev = document.getElementById('statsChevron');
+  if(statsSec){ statsSec.style.display = state.settings.statsSectionExpanded ? 'block' : 'none'; }
+  if(statsChev){ statsChev.textContent = state.settings.statsSectionExpanded ? '▴' : '▾'; }
   document.getElementById('heroIncome').classList.remove('skeleton');
   document.getElementById('heroExpense').classList.remove('skeleton');
   const viewCur = dashboardViewCurrency || state.settings.baseCurrency;
   const displayTotal = dashboardViewCurrency ? convertAmount(totalBaseBalance(), state.settings.baseCurrency, dashboardViewCurrency) : totalBaseBalance();
-  document.getElementById('heroTotal').innerHTML = fmt(displayTotal)+ ' <span>'+viewCur+'</span>';
+  animateHeroTotal(displayTotal, viewCur);
   const viewBadge = document.getElementById('viewCurBadge');
   if(viewBadge) viewBadge.textContent = dashboardViewCurrency ? '· بالـ '+dashboardViewCurrency+' ▾' : '👁️ اعرض بعملة تانية';
   const nwLine = document.getElementById('netWorthLine');
@@ -1320,7 +1371,7 @@ function renderDashboard(){
   // recent tx
   const recWrap = document.getElementById('dashRecent');
   const recent = [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,6);
-  recWrap.innerHTML = recent.length? recent.map(txRowHTML).join('') : emptyStateHTML('مفيش حركات لسه','دوس على + وسجل أول حركة');
+  recWrap.innerHTML = recent.length? recent.map(txRowHTML).join('') : emptyStateHTML('مفيش حركات لسه','دوس على + وسجل أول حركة','✨');
 }
 
 function monthSpentForCategory(categoryId){
@@ -1345,8 +1396,8 @@ function budgetTrendArrow(categoryId, current){
   return `<span style="color:${up?'var(--red)':'var(--brand-2)'};font-weight:800;">${up?'▲':'▼'} ${Math.abs(diff).toFixed(0)}%</span>`;
 }
 
-function emptyStateHTML(title,sub){
-  return `<div class="empty-state"><div class="e-icon">🗂️</div><div class="e-title">${title}</div><div class="e-sub">${sub}</div></div>`;
+function emptyStateHTML(title,sub,icon){
+  return `<div class="empty-state"><div class="e-icon">${icon||'🗂️'}</div><div class="e-title">${title}</div><div class="e-sub">${sub}</div></div>`;
 }
 
 function txRowHTML(t){
@@ -1365,7 +1416,8 @@ function txRowHTML(t){
     sub = (w?w.name:'—') + ' · ' + fmtDate(t.date);
     amtClass = t.type==='income'?'pos':'neg';
     amtText = (t.type==='income'?'+':'-') + fmt(t.amount) + ' ' + (w?w.currency:'');
-    bg = t.type==='income' ? 'rgba(79,209,165,.15)' : 'var(--red-dim)';
+    if(t.type==='income') bg = 'rgba(79,209,165,.15)';
+    else bg = c&&c.color ? `color-mix(in srgb, ${c.color} 22%, transparent)` : 'var(--red-dim)';
   }
   return `<div class="tx-row" onclick="openTxDetail('${t.id}')">
     <div class="tx-icon" style="background:${bg};">${icon}</div>
@@ -1464,11 +1516,11 @@ function initWalletDrag(){
 }
 function renderWallets(){
   const wrap = document.getElementById('walletsList');
-  if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك'); return; }
+  if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك','👛'); return; }
   const active = state.wallets.filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
   const archived = state.wallets.filter(w=>w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
   const unclassified = active.filter(w=>!w.walletType);
-  const classifyBanner = unclassified.length>0 ? `<div class="card" style="border-color:var(--gold);margin-bottom:12px;">
+  const classifyBanner = unclassified.length>0 ? `<div class="card card-tip" style="margin-bottom:12px;">
     <div style="font-weight:800;font-size:13px;margin-bottom:6px;">🏷️ حدد نوع محافظك</div>
     <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">عشان تقرير "كاش مقابل رقمي" يبقى دقيق، دوس على كل محفظة تحت وحدد كاش ولا رقمية:</div>
     ${unclassified.map(w=>`<button type="button" class="btn-secondary" style="margin-top:6px;text-align:right;" onclick="openWalletForm('${w.id}')">${w.icon} ${esc(w.name)} — دوس تحدد النوع</button>`).join('')}
@@ -1563,7 +1615,7 @@ function renderTransactions(){
   }
   list.sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id));
   const wrap = document.getElementById('txList');
-  if(list.length===0){ wrap.innerHTML = emptyStateHTML('مفيش حركات','جرب تغيّر الفلتر أو ضيف حركة جديدة'); return; }
+  if(list.length===0){ wrap.innerHTML = emptyStateHTML('مفيش حركات','جرب تغيّر الفلتر أو ضيف حركة جديدة','📋'); return; }
   // group by date
   let html=''; let lastDate=null;
   list.forEach(t=>{
@@ -1830,7 +1882,7 @@ function renderAnomalies(){
   });
   if(anomalies.length===0){ host.innerHTML=''; return; }
   anomalies.sort((a,b)=>b.pct-a.pct);
-  host.innerHTML = `<div class="card" style="margin-top:10px;border-color:var(--gold);">
+  host.innerHTML = `<div class="card card-tip" style="margin-top:10px;">
     <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">⚡ مصاريف غير عادية الشهر ده</div>
     ${anomalies.slice(0,4).map(a=>{
       const c = catById(a.catId);
@@ -2485,7 +2537,7 @@ function renderPieChart(byCat, total){
   }
   const R=80,CX=90,CY=90; let angle=-90;
   let paths='';
-  const palette = COLORS;
+  const colorFor = (catId,i)=>{ const c=catById(catId); return (c&&c.color)||COLORS[i%COLORS.length]; };
   entries.forEach((e,i)=>{
     const pct = e[1]/total;
     const sweep = pct*360;
@@ -2495,14 +2547,14 @@ function renderPieChart(byCat, total){
     const endAngle = angle+sweep;
     const x2 = CX + R*Math.cos(endAngle*Math.PI/180);
     const y2 = CY + R*Math.sin(endAngle*Math.PI/180);
-    paths += `<path d="M${CX},${CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${palette[i%palette.length]}" />`;
+    paths += `<path d="M${CX},${CY} L${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z" fill="${colorFor(e[0],i)}" />`;
     angle = endAngle;
   });
   svgHost.innerHTML = `<svg width="180" height="180" viewBox="0 0 180 180"><circle cx="90" cy="90" r="80" fill="var(--bg-elev-2)"/><g class="pie-animate">${paths}<circle cx="90" cy="90" r="46" fill="var(--card)"/></g></svg>`;
   legendHost.innerHTML = entries.slice(0,8).map((e,i)=>{
     const c = catById(e[0]);
     const pct = ((e[1]/total)*100).toFixed(0);
-    return `<div class="legend-row"><div class="legend-dot" style="background:${palette[i%palette.length]};"></div><div class="ln">${c?c.icon+' '+esc(c.name):'أخرى'}</div><div class="lp">${pct}%</div><div class="lv">${fmt(e[1])}</div></div>`;
+    return `<div class="legend-row"><div class="legend-dot" style="background:${colorFor(e[0],i)};"></div><div class="ln">${c?c.icon+' '+esc(c.name):'أخرى'}</div><div class="lp">${pct}%</div><div class="lv">${fmt(e[1])}</div></div>`;
   }).join('');
 }
 
@@ -2596,7 +2648,7 @@ function renderPanel(){
 function budgetsPanelHTML(){
   const expenseCats = state.categories.filter(c=>c.type==='expense');
   let html = `<button class="btn-primary" onclick="openBudgetForm()">+ إضافة ميزانية</button>`;
-  if(state.budgets.length===0){ html += emptyStateHTML('مفيش ميزانيات لسه',''); return html; }
+  if(state.budgets.length===0){ html += emptyStateHTML('مفيش ميزانيات لسه','','🎯'); return html; }
   html += state.budgets.map(b=>{
     const c = catById(b.categoryId);
     const spent = monthSpentForCategory(b.categoryId);
@@ -2685,7 +2737,7 @@ function recurringPanelHTML(){
   let html = `<button class="btn-primary" onclick="openRecurringForm()">+ حركة متكررة جديدة</button>`;
   const suggestions = detectRecurringSuggestions();
   if(suggestions.length>0){
-    html += `<div class="card" style="margin-top:12px;border-color:var(--gold);">
+    html += `<div class="card card-tip" style="margin-top:12px;">
       <div style="font-weight:800;font-size:13px;margin-bottom:8px;">💡 اقتراحات ذكية</div>
       <div style="font-size:11.5px;color:var(--ink-faint);margin-bottom:10px;">لاحظنا أنماط دي شكلها حركات ثابتة بتتكرر:</div>
       ${suggestions.map(s=>{
@@ -2697,7 +2749,7 @@ function recurringPanelHTML(){
       }).join('')}
     </div>`;
   }
-  if(state.recurring.length===0){ html+=emptyStateHTML('مفيش حركات متكررة',''); return html; }
+  if(state.recurring.length===0){ html+=emptyStateHTML('مفيش حركات متكررة','','🔁'); return html; }
   const freqLabel={once:'مجدولة (مرة واحدة)',daily:'يوميًا',weekly:'أسبوعيًا',monthly:'شهريًا',yearly:'سنويًا'};
   html += state.recurring.map(r=>{
     const w = walletById(r.walletId); const c = catById(r.categoryId);
@@ -2788,7 +2840,7 @@ function deleteRecurring(id){
 /* ---- Debts ---- */
 function debtsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openDebtForm()">+ دين جديد</button>`;
-  if(state.debts.length===0){ html+=emptyStateHTML('مفيش ديون مسجلة',''); return html; }
+  if(state.debts.length===0){ html+=emptyStateHTML('مفيش ديون مسجلة','','🤝'); return html; }
   const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
   const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
   html += `<div class="stat-grid" style="margin-bottom:14px;">
@@ -2797,7 +2849,7 @@ function debtsPanelHTML(){
   </div>`;
   const oweDebts = state.debts.filter(d=>d.direction==='owe'&&!d.settled).map(d=>({...d, remaining: d.amount-(d.paidAmount||0)})).sort((a,b)=>a.remaining-b.remaining);
   if(oweDebts.length>1){
-    html += `<div class="card" style="margin-bottom:14px;border-color:var(--gold);">
+    html += `<div class="card card-tip" style="margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;margin-bottom:6px;">💡 خطة سداد ذكية</div>
       <div style="font-size:12px;color:var(--ink-dim);margin-bottom:10px;">ابدأ بأصغر دين الأول (طريقة "كرة الثلج") — بتخلصه بسرعة وبتحس بتقدم يحفزك تكمل الباقي:</div>
       ${oweDebts.map((d,i)=>`<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;"><span>${i+1}. ${esc(d.person)}</span><b class="money">${fmt(d.remaining)} ${state.settings.baseCurrency}</b></div>`).join('')}
@@ -2914,7 +2966,7 @@ function deleteDebt(id){ state.debts=state.debts.filter(d=>d.id!==id); save(); c
 /* ---- Goals ---- */
 function goalsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openGoalForm()">+ هدف جديد</button>`;
-  if(state.goals.length===0){ html+=emptyStateHTML('مفيش أهداف ادخار',''); return html; }
+  if(state.goals.length===0){ html+=emptyStateHTML('مفيش أهداف ادخار','','🏁'); return html; }
   html += state.goals.map(g=>{
     const pct = Math.min(100,(g.current/g.target)*100);
     return `<div class="goal-card">
@@ -3028,7 +3080,7 @@ function assetsPanelHTML(){
   }
   const active = state.assets.filter(a=>!a.sold);
   const sold = state.assets.filter(a=>a.sold);
-  if(active.length===0 && sold.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الموبايل أو اللاب توب أو أي حاجة ليها قيمة'); return html; }
+  if(active.length===0 && sold.length===0){ html+=emptyStateHTML('مفيش أصول مسجلة','زي الدهب أو الموبايل أو اللاب توب أو أي حاجة ليها قيمة','💎'); return html; }
   html += `<div class="stat-box" style="margin-top:14px;margin-bottom:4px;"><div class="sv money" style="color:var(--gold);">${fmt(totalAssetsBase())}</div><div class="sl">إجمالي قيمة الأصول (${state.settings.baseCurrency})</div></div>`;
   html += active.map(a=>{
     const val = assetValueOf(a);
@@ -3325,6 +3377,7 @@ function openCategoryForm(id){
     </div>
     <div class="field"><label>الاسم</label><input id="catName" value="${ex?esc(ex.name):''}" placeholder="اسم التصنيف"></div>
     <div class="field"><label>الأيقونة</label><div class="icon-grid" id="catIconGrid">${[...ICONS_EXPENSE,...ICONS_INCOME].map(ic=>`<button type="button" class="${ex&&ex.icon===ic?'sel':''}" data-i="${ic}" onclick="selectIcon(this)">${ic}</button>`).join('')}</div></div>
+    <div class="field"><label>اللون</label><div class="color-grid" id="catColorGrid">${COLORS.map(c=>`<button type="button" class="${ex&&ex.color===c?'sel':(!ex&&c===COLORS[0]?'sel':'')}" data-c="${c}" style="background:${c};" onclick="selectColor2(this)"></button>`).join('')}</div></div>
     <div class="field"><label>تصنيف رئيسي (اختياري — علشان تعمله تصنيف فرعي)</label>
       <select id="catParent">
         <option value="">— بدون (تصنيف رئيسي) —</option>
@@ -3344,11 +3397,13 @@ function saveCategory(id){
   const type = document.querySelector('#catType .active').dataset.t;
   const name = document.getElementById('catName').value.trim();
   const iconBtn = document.getElementById('catIconGrid').querySelector('.sel');
+  const colorBtn = document.getElementById('catColorGrid').querySelector('.sel');
   const parentId = document.getElementById('catParent').value || null;
   if(!name){toast('اكتب اسم');return;}
   const icon = iconBtn?iconBtn.dataset.i:(type==='income'?'💰':'🧾');
-  if(id){ Object.assign(state.categories.find(c=>c.id===id), {name,type,icon,parentId}); }
-  else { state.categories.push({id:uid(),name,type,icon,parentId}); }
+  const color = colorBtn?colorBtn.dataset.c:COLORS[0];
+  if(id){ Object.assign(state.categories.find(c=>c.id===id), {name,type,icon,parentId,color}); }
+  else { state.categories.push({id:uid(),name,type,icon,parentId,color}); }
   save(); closeModal(); renderAll(); toast('اتحفظ');
 }
 function deleteCategory(id){
@@ -3647,7 +3702,7 @@ function importBackup(){
 function aboutPanelHTML(){
   return `
     <div class="card" style="text-align:center;padding:26px 18px;">
-      <div class="brand-mark" style="margin:0 auto 12px;width:52px;height:52px;font-size:24px;">S</div>
+      <div class="brand-mark" style="margin:0 auto 12px;width:52px;height:52px;font-size:24px;">👛</div>
       <div style="font-weight:800;font-size:16px;">SAM Finance</div>
       <div style="font-size:12.5px;color:var(--ink-faint);margin-top:6px;">تطبيق متابعة المصاريف الشخصي بتاعك<br>كل بياناتك محفوظة على جهازك بس</div>
       <div style="font-size:11px;color:var(--ink-faint);margin-top:16px;">صُنع خصيصًا لـ NIMO_GG</div>
@@ -3658,7 +3713,7 @@ function aboutPanelHTML(){
 /* ---- Quick Templates ---- */
 function templatesPanelHTML(){
   let html = `<button class="btn-primary" onclick="openTemplateForm()">+ قالب جديد</button>`;
-  if(state.templates.length===0){ html += emptyStateHTML('مفيش قوالب لسه','اعمل قالب لحركة بتتكرر (زي القهوة أو المواصلات) وسجلها بضغطة واحدة'); return html; }
+  if(state.templates.length===0){ html += emptyStateHTML('مفيش قوالب لسه','اعمل قالب لحركة بتتكرر (زي القهوة أو المواصلات) وسجلها بضغطة واحدة','⚡'); return html; }
   html += `<div class="card menu-list" style="margin-top:12px;">` + state.templates.map(tpl=>{
     const w = walletById(tpl.walletId); const c = catById(tpl.categoryId);
     return `<div class="m-item">
@@ -3746,7 +3801,7 @@ function render503020(){
 let annualSelectedYear = null;
 function annualReportPanelHTML(){
   const years = [...new Set(state.transactions.map(t=>t.date.slice(0,4)))].sort((a,b)=>b-a);
-  if(years.length===0) return emptyStateHTML('مفيش بيانات كفاية','سجل حركات الأول عشان نقدر نعرض تقرير سنوي');
+  if(years.length===0) return emptyStateHTML('مفيش بيانات كفاية','سجل حركات الأول عشان نقدر نعرض تقرير سنوي','📅');
   if(!annualSelectedYear || !years.includes(annualSelectedYear)) annualSelectedYear = years[0];
   const year = annualSelectedYear;
   let totalInc=0, totalExp=0;
@@ -3995,7 +4050,7 @@ function renderWhatIfResult(){
 /* ---- Installments / BNPL ---- */
 function installmentsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openInstallmentForm()">+ قسط جديد</button>`;
-  if(state.installments.length===0){ html+=emptyStateHTML('مفيش أقساط مسجلة','زي موبايل أو جهاز اشتريته بالتقسيط'); return html; }
+  if(state.installments.length===0){ html+=emptyStateHTML('مفيش أقساط مسجلة','زي موبايل أو جهاز اشتريته بالتقسيط','💳'); return html; }
   html += state.installments.slice().sort((a,b)=>(a.paidCount>=a.numInstallments)-(b.paidCount>=b.numInstallments)).map(ins=>{
     const remaining = ins.numInstallments - ins.paidCount;
     const done = remaining<=0;
@@ -4089,7 +4144,7 @@ function calendarPanelHTML(){
   });
   const today = todayStr();
   const upcoming = events.filter(e=>e.date>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,25);
-  if(upcoming.length===0) return emptyStateHTML('مفيش مواعيد قريبة','هتظهر هنا الاشتراكات ومواعيد سداد الديون والأقساط الجاية');
+  if(upcoming.length===0) return emptyStateHTML('مفيش مواعيد قريبة','هتظهر هنا الاشتراكات ومواعيد سداد الديون والأقساط الجاية','📆');
   let html=''; let lastDate=null;
   upcoming.forEach(e=>{
     if(e.date!==lastDate){ html += `<div class="day-group-label">${fmtDate(e.date)}</div>`; lastDate=e.date; }
@@ -4104,7 +4159,7 @@ function calendarPanelHTML(){
 
 /* ---- Merchants / places management ---- */
 function merchantsPanelHTML(){
-  if(state.merchants.length===0) return emptyStateHTML('مفيش أماكن لسه','هتتضاف تلقائي أول ما تكتب مكان في أي حركة صرف');
+  if(state.merchants.length===0) return emptyStateHTML('مفيش أماكن لسه','هتتضاف تلقائي أول ما تكتب مكان في أي حركة صرف','📍');
   return state.merchants.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(m=>{
     const count = state.transactions.filter(t=>t.placeId===m.id).length;
     return `<div class="card menu-list" style="margin-bottom:8px;">
@@ -4145,7 +4200,7 @@ function zakatPanelHTML(){
   const aboveNisab = pricePerGram24k>0 && zakatableWealth >= nisabValue;
   const zakatDue = aboveNisab ? zakatableWealth * 0.025 : 0;
   return `
-    ${!pricePerGram24k?`<div class="card" style="border-color:var(--gold);margin-bottom:12px;"><div style="font-size:12.5px;color:var(--ink-dim);">محتاجين سعر الدهب عشان نحسب النصاب بدقة. روح لـ "الأصول والاستثمارات" وحدّث سعر الدهب الأول.</div></div>`:''}
+    ${!pricePerGram24k?`<div class="card card-tip" style="margin-bottom:12px;"><div style="font-size:12.5px;color:var(--ink-dim);">محتاجين سعر الدهب عشان نحسب النصاب بدقة. روح لـ "الأصول والاستثمارات" وحدّث سعر الدهب الأول.</div></div>`:''}
     <div class="stat-grid">
       <div class="stat-box"><div class="sv money">${fmt(zakatableWealth)}</div><div class="sl">إجمالي مالك القابل للزكاة</div></div>
       <div class="stat-box"><div class="sv money" style="color:var(--gold);">${fmt(nisabValue)}</div><div class="sl">قيمة النصاب (85 جم دهب)</div></div>
@@ -4249,6 +4304,7 @@ function openWalletForm(id){
 }
 function selectIcon2(btn,id){ document.getElementById(id).querySelectorAll('button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
 function selectColor(btn){ document.getElementById('wColorGrid').querySelectorAll('button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
+function selectColor2(btn){ document.getElementById('catColorGrid').querySelectorAll('button').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); }
 function saveWallet(id){
   const name = document.getElementById('wName').value.trim();
   const currency = document.getElementById('wCurrency').value;
@@ -4774,6 +4830,15 @@ function renderAll(){
   renderTransactions();
   renderReports();
   if(currentPanel && document.getElementById('view-more').classList.contains('active')) renderPanel();
+  updateAttentionDot();
+}
+function updateAttentionDot(){
+  const dot = document.getElementById('moreAttentionDot');
+  if(!dot) return;
+  const unclassifiedWallets = state.wallets.some(w=>!w.archived && !w.walletType);
+  const upcoming = upcomingRecurringWithin(1);
+  const needsAttention = unclassifiedWallets || upcoming.length>0;
+  dot.style.display = needsAttention ? 'block' : 'none';
 }
 
 if('serviceWorker' in navigator){
@@ -4804,9 +4869,11 @@ function init(){
   }, 600);
 }
 const OB_SLIDES = [
-  {icon:'👛', title:'كل محافظك في مكان واحد', desc:'كاش، فودافون كاش، حسابات بنكية... ضيف أي عدد من المحافظ وتابع رصيد كل واحدة لحالها وكلهم مع بعض.'},
-  {icon:'🔁', title:'دخل، صرف، وتحويل', desc:'سجل أي حركة بضغطة واحدة من زرار الـ + تحت. التحويل بين محفظتين بعملات مختلفة بيتحسب تلقائي.'},
-  {icon:'🎯', title:'ميزانية وأهداف وديون', desc:'حدد ميزانية شهرية لكل تصنيف، وفّر لهدف معين، وتابع اللي ليك واللي عليك — كل حاجة مربوطة بمحافظك الفعلية.'},
+  {icon:'👛', title:'كل محافظك في مكان واحد', desc:'كاش، فودافون كاش، حسابات بنكية... ضيف أي عدد من المحافظ، رتّبها زي ما يريحك، وتابع رصيد كل واحدة لحالها وكلهم مع بعض.'},
+  {icon:'🔁', title:'دخل، صرف، وتحويل', desc:'سجل أي حركة بضغطة واحدة من زرار الـ + تحت. تقدر تقسّم أي حركة على أكتر من محفظة، وتضيف مكان وتاجز لكل حركة.'},
+  {icon:'💎', title:'أصول، ديون، وأقساط', desc:'دهب بسعر حي، أجهزة إلكترونية بحساب اهلاك تلقائي، ديون وأقساط مربوطين فعليًا بمحافظك — كل ثروتك في صورة واحدة.'},
+  {icon:'🕋', title:'ميزانية وأهداف وزكاة', desc:'حدد ميزانية شهرية لكل تصنيف، وفّر لهدف معين، واحسب زكاة مالك تلقائيًا من محافظك وأصولك.'},
+  {icon:'🎨', title:'شكله بالظبط زي ما تحب', desc:'٨ ثيمات جاهزة، أو لوّن أي حاجة براحتك بنفسك — خلفيات، نصوص، وألوان مميزة، لكل وضع فاتح وغامق لوحده.'},
   {icon:'🔒', title:'بياناتك ملكك بس', desc:'كل حاجة متخزنة على جهازك بس، من غير سيرفر بيشوفها. فعّل قفل الرمز السري أو Face ID من الإعدادات لحماية إضافية.'},
 ];
 let obIndex = 0;
