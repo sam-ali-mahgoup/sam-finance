@@ -1363,7 +1363,7 @@ function renderDashboard(){
       const cls = pct>=100?'over':(pct>=80?'warn':'');
       return `<div class="budget-mini">
         <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)}</span></div>
-        <div class="bm-track"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
+        <div class="bm-track"><div class="bm-fill ${cls}" style="width:${pct}%;${!cls&&c&&c.color?`background:${c.color};`:''}"></div></div>
       </div>`;
     }).join('');
   }
@@ -2156,21 +2156,25 @@ function renderHealthScore(){
 
 function calcBudgetStreak(){
   if(state.budgets.length===0) return 0;
-  const totalMonthlyBudget = state.budgets.reduce((s,b)=>s+b.limit,0);
+  const catIds = new Set(state.budgets.map(b=>b.categoryId));
+  const relevantTx = state.transactions.filter(t=>t.type==='expense' && catIds.has(t.categoryId));
   const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-  const dailyAllowance = totalMonthlyBudget / daysInMonth;
   let streak = 0;
-  for(let i=0;i<60;i++){
+  for(let i=0;i<90;i++){
     const d = new Date(now); d.setDate(now.getDate()-i);
     const dateStr = localDateStr(d);
-    let daySpend = 0;
-    state.transactions.forEach(t=>{
-      if(t.type!=='expense'||t.date!==dateStr) return;
-      const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
-      daySpend += toBase(t.amount,cur);
-    });
-    if(daySpend > dailyAllowance*1.15) break;
+    const monthStart = localDateStr(new Date(d.getFullYear(), d.getMonth(), 1));
+    let exceeded = false;
+    for(const b of state.budgets){
+      let spent = 0;
+      relevantTx.forEach(t=>{
+        if(t.categoryId!==b.categoryId || t.date<monthStart || t.date>dateStr) return;
+        const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
+        spent += toBase(t.amount,cur);
+      });
+      if(spent>b.limit){ exceeded=true; break; }
+    }
+    if(exceeded) break;
     streak++;
   }
   return streak;
@@ -2656,7 +2660,7 @@ function budgetsPanelHTML(){
     const cls = pct>=100?'over':(pct>=80?'warn':'');
     return `<div class="card" style="margin-top:10px;" onclick="openBudgetForm('${b.categoryId}')">
       <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)} ${state.settings.baseCurrency}</span></div>
-      <div class="bm-track" style="margin-top:6px;"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
+      <div class="bm-track" style="margin-top:6px;"><div class="bm-fill ${cls}" style="width:${pct}%;${!cls&&c&&c.color?`background:${c.color};`:''}"></div></div>
     </div>`;
   }).join('');
   return html;
@@ -3353,8 +3357,8 @@ function categoryTreeHTML(type){
   const parents = cats.filter(c=>!c.parentId);
   return parents.map(p=>{
     const children = cats.filter(c=>c.parentId===p.id);
-    return `<div class="m-item" onclick="openCategoryForm('${p.id}')"><div class="m-icon">${p.icon}</div><div class="m-text"><div class="m-title">${esc(p.name)}</div>${children.length?`<div class="m-sub">${children.length} تصنيف فرعي</div>`:''}</div><div class="m-arrow">‹</div></div>`
-      + children.map(c=>`<div class="m-item" style="padding-right:24px;" onclick="openCategoryForm('${c.id}')"><div class="m-icon" style="width:30px;height:30px;font-size:14px;">${c.icon}</div><div class="m-text"><div class="m-title" style="font-size:13px;">↳ ${esc(c.name)}</div></div><div class="m-arrow">‹</div></div>`).join('');
+    return `<div class="m-item" onclick="openCategoryForm('${p.id}')"><div class="m-icon" style="background:color-mix(in srgb, ${p.color||'var(--brand)'} 20%, var(--bg-elev-2));">${p.icon}</div><div class="m-text"><div class="m-title">${esc(p.name)}</div>${children.length?`<div class="m-sub">${children.length} تصنيف فرعي</div>`:''}</div><div class="m-arrow">‹</div></div>`
+      + children.map(c=>`<div class="m-item" style="padding-right:24px;" onclick="openCategoryForm('${c.id}')"><div class="m-icon" style="width:30px;height:30px;font-size:14px;background:color-mix(in srgb, ${c.color||'var(--brand)'} 20%, var(--bg-elev-2));">${c.icon}</div><div class="m-text"><div class="m-title" style="font-size:13px;">↳ ${esc(c.name)}</div></div><div class="m-arrow">‹</div></div>`).join('');
   }).join('');
 }
 function categoriesPanelHTML(){
