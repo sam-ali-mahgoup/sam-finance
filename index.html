@@ -872,6 +872,7 @@ function load(){
     if(a.condition===undefined) a.condition='new';
     if(a.annualDepreciationRate===undefined) a.annualDepreciationRate=null;
     if(a.manualOverrideValue===undefined) a.manualOverrideValue=null;
+    if(a.purchasePricePerGram===undefined) a.purchasePricePerGram=null;
   });
   state.wallets.forEach(w=>{ if(w.sharedWith===undefined) w.sharedWith = null; if(w.order===undefined) w.order = 0; });
   document.documentElement.setAttribute('data-theme', state.settings.theme);
@@ -3143,7 +3144,10 @@ function assetsPanelHTML(){
   html += active.map(a=>{
     const val = assetValueOf(a);
     let subLabel, curLabel;
-    if(a.kind==='gold'||a.isGold){ subLabel = `عيار ${a.karat} · ${a.gramWeight} جم`; curLabel = state.settings.baseCurrency; }
+    if(a.kind==='gold'||a.isGold){
+      subLabel = `عيار ${a.karat} · ${a.gramWeight} جم${a.purchasePricePerGram?` · اشتريته بـ${fmt(a.purchasePricePerGram)}/جم`:''}`;
+      curLabel = state.settings.baseCurrency;
+    }
     else if(a.kind==='electronics'){
       const dt = deviceTypeById(a.deviceType);
       const depreciated = a.purchasePrice ? Math.round((1 - val/a.purchasePrice)*100) : 0;
@@ -3161,7 +3165,7 @@ function assetsPanelHTML(){
   if(sold.length>0){
     html += `<div class="section-title">أصول اتباعت</div>`;
     html += sold.map(a=>{
-      const basis = a.kind==='electronics' ? (a.purchasePrice||0) : (a.kind==='gold'||a.isGold ? 0 : (a.value||0));
+      const basis = a.kind==='electronics' ? (a.purchasePrice||0) : (a.kind==='gold'||a.isGold ? ((a.purchasePricePerGram||0)*(a.gramWeight||0)) : (a.value||0));
       const profit = (a.salePrice||0) - basis;
       const color = profit>=0 ? 'var(--income)' : 'var(--red)';
       return `<div class="wallet-card" style="margin-top:10px;opacity:.75;">
@@ -3213,8 +3217,10 @@ function assetKindFieldsHTML(kind, ex){
           <select id="assetKarat" onchange="updateGoldPreview()">${karats.map(k=>`<option value="${k}" ${ex&&ex.karat===k?'selected':(!ex&&k===21?'selected':'')}>عيار ${k}</option>`).join('')}</select>
         </div>
       </div>
+      <div class="field"><label>سعر الجرام وقت الشراء (اختياري)</label><input id="assetGoldBuyPrice" type="text" inputmode="decimal" value="${ex&&ex.purchasePricePerGram?ex.purchasePricePerGram:''}" placeholder="اكتبه لو عايز تتابع ربحك/خسارتك بدقة" onblur="evalCalcField(this)"></div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:-8px;margin-bottom:4px;">لو سبتها فاضية، هناخد سعر السوق الحالي وقت الحفظ كسعر شراء تقريبي.</div>
       <div class="field" style="text-align:center;background:var(--bg-elev-2);border-radius:12px;padding:12px;">
-        <div style="font-size:11px;color:var(--ink-faint);">القيمة المتوقعة</div>
+        <div style="font-size:11px;color:var(--ink-faint);">القيمة المتوقعة دلوقتي</div>
         <div id="goldPreviewValue" style="font-size:20px;font-weight:800;color:var(--gold);margin-top:3px;">—</div>
         <div style="font-size:11px;color:var(--brand-2);font-weight:700;margin-top:8px;cursor:pointer;" onclick="setGoldPriceManually();setTimeout(updateGoldPreview,50);">مش دقيق؟ دخّل سعر الجرام بنفسك</div>
       </div>
@@ -3309,8 +3315,10 @@ function saveAsset(id){
     if(ex.kind==='gold' || ex.isGold){
       const gramWeight = parseFloat(document.getElementById('assetGrams')?.value);
       const karat = parseInt(document.getElementById('assetKarat')?.value);
+      const buyPrice = parseFloat(document.getElementById('assetGoldBuyPrice')?.value);
       if(gramWeight>0) ex.gramWeight = gramWeight;
       if(!isNaN(karat)) ex.karat = karat;
+      if(buyPrice>0) ex.purchasePricePerGram = buyPrice;
     } else if(ex.kind==='electronics'){
       const rate = parseFloat(document.getElementById('assetDeprRate')?.value);
       if(!isNaN(rate)) ex.annualDepreciationRate = rate;
@@ -3328,9 +3336,11 @@ function saveAsset(id){
   if(kind==='gold'){
     const gramWeight = parseFloat(document.getElementById('assetGrams').value);
     const karat = parseInt(document.getElementById('assetKarat').value);
+    const buyPriceInput = parseFloat(document.getElementById('assetGoldBuyPrice').value);
     if(!gramWeight||gramWeight<=0){ toast('اكتب وزن صحيح بالجرام'); return; }
-    obj = {name, icon, kind:'gold', isGold:true, gramWeight, karat, type:'دهب', currency:state.settings.baseCurrency, value:null};
-    purchasePrice = goldPricePerGramBase(karat)*gramWeight;
+    const purchasePricePerGram = buyPriceInput>0 ? buyPriceInput : goldPricePerGramBase(karat);
+    obj = {name, icon, kind:'gold', isGold:true, gramWeight, karat, purchasePricePerGram, type:'دهب', currency:state.settings.baseCurrency, value:null};
+    purchasePrice = purchasePricePerGram*gramWeight;
   } else if(kind==='electronics'){
     const deviceBtn = document.getElementById('assetDeviceChips').querySelector('.sel');
     const deviceType = deviceBtn ? deviceBtn.dataset.id : 'other';
@@ -3363,12 +3373,19 @@ function saveAsset(id){
 function openSellAssetForm(id){
   const a = state.assets.find(x=>x.id===id);
   if(!a) return;
+  const isGoldAsset = a.kind==='gold' || a.isGold;
   const currentVal = assetValueOf(a);
+  const currentPerGram = isGoldAsset && a.gramWeight ? currentVal/a.gramWeight : 0;
   openModal(`
     <div class="sheet-handle"></div>
     <div class="sheet-title">بيع: ${esc(a.name)}</div>
-    <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">القيمة المتوقعة دلوقتي: <span class="money">${fmt(currentVal)} ${state.settings.baseCurrency}</span></div>
+    <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">القيمة المتوقعة دلوقتي: <span class="money">${fmt(currentVal)} ${state.settings.baseCurrency}</span>${isGoldAsset?` (${fmt(currentPerGram)} للجرام)`:''}</div>
+    ${isGoldAsset?`
+    <div class="field"><label>سعر بيع الجرام الفعلي</label><input id="sellPricePerGram" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateSellPreview('${id}')"></div>
+    <div style="font-size:11px;color:var(--ink-faint);margin-top:-8px;margin-bottom:4px;">هيتضرب في وزن الجرامات (${a.gramWeight} جم) عشان يطلع السعر الكلي.</div>
+    `:`
     <div class="field"><label>سعر البيع الفعلي</label><input id="sellPrice" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateSellPreview('${id}')"></div>
+    `}
     <div class="field"><label>المحفظة اللي هتستلم فيها الفلوس</label>
       <div class="chip-select" id="sellWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'sellWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
     </div>
@@ -3376,12 +3393,21 @@ function openSellAssetForm(id){
     <button class="btn-primary" onclick="confirmSellAsset('${id}')">تأكيد البيع</button>
   `);
 }
+function getSellPriceInput(id){
+  const a = state.assets.find(x=>x.id===id);
+  const isGoldAsset = a && (a.kind==='gold' || a.isGold);
+  if(isGoldAsset){
+    const perGram = parseFloat(document.getElementById('sellPricePerGram')?.value)||0;
+    return perGram * (a.gramWeight||0);
+  }
+  return parseFloat(document.getElementById('sellPrice')?.value)||0;
+}
 function updateSellPreview(id){
   const a = state.assets.find(x=>x.id===id);
-  const price = parseFloat(document.getElementById('sellPrice')?.value)||0;
+  const price = getSellPriceInput(id);
   const wrap = document.getElementById('sellPreviewResult');
   if(!wrap || price<=0) { if(wrap) wrap.innerHTML=''; return; }
-  const basis = a.kind==='electronics' ? a.purchasePrice : (a.kind==='gold'||a.isGold ? assetValueOf(a) : a.value);
+  const basis = a.kind==='electronics' ? a.purchasePrice : (a.kind==='gold'||a.isGold ? ((a.purchasePricePerGram||0)*(a.gramWeight||0)) : a.value);
   const currentVal = assetValueOf(a);
   const profitVsPurchase = price - (basis||0);
   const profitVsExpected = price - currentVal;
@@ -3395,7 +3421,7 @@ function updateSellPreview(id){
 function confirmSellAsset(id){
   const a = state.assets.find(x=>x.id===id);
   if(!a) return;
-  const price = parseFloat(document.getElementById('sellPrice').value);
+  const price = getSellPriceInput(id);
   const wSel = document.getElementById('sellWalletChips').querySelector('.sel');
   if(!price||price<=0){ toast('اكتب سعر بيع صحيح'); return; }
   if(!wSel){ toast('اختار محفظة'); return; }
