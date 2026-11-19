@@ -404,6 +404,7 @@ body.privacy-on .icon-btn .ic-hide{display:block;color:var(--brand-2);}
 .amount-input{font-size:40px!important;font-weight:800;text-align:center;background:transparent!important;border:none!important;box-shadow:none!important;padding:6px 0!important;direction:ltr;font-variant-numeric:tabular-nums;}
 .amount-input::placeholder{color:var(--ink-faint);opacity:.6;}
 .amount-hint{font-size:11px;color:var(--ink-faint);margin-top:-2px;}
+.cross-cur-hint{font-size:11.5px;color:var(--brand-2);font-weight:700;margin-top:6px;min-height:1px;}
 .inline-link{background:none;border:none;padding:8px 2px 0;color:var(--brand-2);font-size:12.5px;font-weight:700;cursor:pointer;}
 .tx-more{border-top:1px solid var(--border);margin-top:4px;padding-top:4px;}
 .tx-more summary{list-style:none;cursor:pointer;padding:10px 2px;font-size:13px;font-weight:700;color:var(--brand-2);display:flex;align-items:center;gap:8px;}
@@ -488,7 +489,7 @@ body.privacy-on .icon-btn .ic-hide{display:block;color:var(--brand-2);}
 .pin-dots{display:flex;gap:14px;}
 .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink-faint);}
 .pin-dot.filled{background:var(--brand-2);border-color:var(--brand-2);}
-.pin-pad{display:grid;grid-template-columns:repeat(3,64px);gap:16px;}
+.pin-pad{direction:ltr;display:grid;grid-template-columns:repeat(3,64px);gap:16px;}
 .pin-pad button{width:64px;height:64px;border-radius:50%;background:var(--bg-elev-2);font-size:22px;font-weight:700;}
 .pin-pad button:active{background:var(--brand);color:#fff;}
 
@@ -570,6 +571,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
   <div class="pin-dots" id="pinDots"></div>
   <div class="pin-pad" id="pinPad"></div>
   <div id="pinError" style="color:var(--red);font-size:12.5px;font-weight:700;height:14px;"></div>
+  <button id="pinCancel" class="inline-link" style="display:none;margin-top:10px;padding:10px 24px;font-size:15px;" onclick="cancelPinCapture()">إلغاء</button>
 </div>
 
 <div id="app">
@@ -601,6 +603,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 
     <div id="recurringAlertWrap"></div>
     <div id="lowBalanceAlertWrap"></div>
+    <div id="backupReminderWrap"></div>
 
     <div class="section-title">آخر الحركات <span class="link" onclick="switchView('transactions')">الكل ‹</span></div>
     <div class="card" id="dashRecent"></div>
@@ -653,7 +656,7 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
       <div class="stat-box"><div class="sv" id="repIncome" style="color:var(--income);">0</div><div class="sl">إجمالي الدخل</div></div>
       <div class="stat-box"><div class="sv" id="repExpense" style="color:var(--red);">0</div><div class="sl">إجمالي الصرف</div></div>
       <div class="stat-box"><div class="sv" id="repDaily">0</div><div class="sl">متوسط يومي</div></div>
-      <div class="stat-box"><div class="sv" id="repCompare">—</div><div class="sl">مقارنة بالشهر اللي فات</div></div>
+      <div class="stat-box"><div class="sv" id="repCompare">—</div><div class="sl" id="repCompareLabel">مقارنة بالشهر اللي فات</div></div>
     </div>
 
     <div class="section-title">توزيع المصروفات</div>
@@ -876,10 +879,23 @@ function load(){
   if(state.settings.onboardingSeen===undefined) state.settings.onboardingSeen = false;
   if(state.settings.showHijri===undefined) state.settings.showHijri = false;
   if(state.settings.statsSectionExpanded===undefined) state.settings.statsSectionExpanded = false;
+  if(state.settings.lastBackupDate===undefined) state.settings.lastBackupDate = null;
   if(state.settings.appOpenStreak===undefined) state.settings.appOpenStreak = 0;
   if(state.settings.lastOpenDate===undefined) state.settings.lastOpenDate = null;
   if(state.settings.accentTheme===undefined) state.settings.accentTheme = 'green';
   if(state.settings.fontScale===undefined) state.settings.fontScale = 'medium';
+  if(!state.settings.rates) state.settings.rates = {EGP:1};
+  if(!state.settings.rates[state.settings.baseCurrency]) state.settings.rates[state.settings.baseCurrency] = 1;
+  {
+    const used = new Set();
+    (state.wallets||[]).forEach(w=>w.currency&&used.add(w.currency));
+    (state.debts||[]).forEach(d=>d.currency&&used.add(d.currency));
+    (state.goals||[]).forEach(g=>g.currency&&used.add(g.currency));
+    (state.assets||[]).forEach(a=>a.currency&&used.add(a.currency));
+    const review = new Set(state.settings.ratesNeedReview||[]);
+    used.forEach(c=>{ if(!(state.settings.rates[c]>0)){ state.settings.rates[c]=1; review.add(c); } });
+    state.settings.ratesNeedReview = [...review].filter(c=>c!==state.settings.baseCurrency);
+  }
   if(!state.settings.customColors || !state.settings.customColors.dark || !state.settings.customColors.light){
     state.settings.customColors = {dark:{}, light:{}};
   }
@@ -908,6 +924,7 @@ function load(){
   document.body.setAttribute('data-theme', state.settings.theme);
 }
 let saveFailWarned = false;
+let storagePersisted = false;
 function save(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -999,8 +1016,14 @@ function toBase(amount,currency){
   return (amount * r) / baseR;
 }
 function walletById(id){ return state.wallets.find(w=>w.id===id); }
-function sortedWallets(){ return [...state.wallets].filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
-function allWalletsSorted(){ return [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0)); }
+function walletCur(id){ return walletById(id)?.currency || state.settings.baseCurrency; }
+/* Amount expressed in another currency -> the wallet's own currency (2dp). */
+function moneyIntoWallet(amount, fromCur, walletId){
+  return Math.round(convertAmount(amount, fromCur||state.settings.baseCurrency, walletCur(walletId))*100)/100;
+}
+function liveWallets(){ return state.wallets.filter(w=>!w.deleted); }
+function sortedWallets(){ return liveWallets().filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0)); }
+function allWalletsSorted(){ return [...liveWallets()].sort((a,b)=>(a.order||0)-(b.order||0)); }
 function merchantById(id){ return state.merchants.find(m=>m.id===id); }
 function resolveMerchant(name){
   const trimmed = (name||'').trim();
@@ -1036,7 +1059,7 @@ function fetchLiveRates(showToast){
           // The API returns "how many units of C equal 1 base currency unit"
           // (e.g. 1 EGP = 0.0208 USD). Our internal format is the inverse:
           // "how many base-currency units equal 1 unit of C" (1 USD = 48 EGP).
-          if(data.rates[c]) state.settings.rates[c] = 1 / data.rates[c];
+          if(data.rates[c]){ state.settings.rates[c] = 1 / data.rates[c]; state.settings.ratesNeedReview = (state.settings.ratesNeedReview||[]).filter(x=>x!==c); }
         });
         state.settings.ratesLastUpdated = new Date().toISOString();
         save();
@@ -1144,7 +1167,7 @@ function walletBalance(walletId){
   return bal;
 }
 function totalBaseBalance(){
-  return state.wallets.reduce((s,w)=> s + toBase(walletBalance(w.id), w.currency), 0);
+  return liveWallets().reduce((s,w)=> s + toBase(walletBalance(w.id), w.currency), 0);
 }
 
 /* =========================================================================
@@ -1176,7 +1199,7 @@ function processRecurring(){
     if(r.paused) return;
     if(!r.anchorDay) r.anchorDay = +r.nextDate.slice(8,10);
     let guard = 0;
-    while(r.nextDate <= today && guard < 36){
+    while(r.nextDate <= today && guard < 1500){
       state.transactions.push({
         id:uid(), type:r.type, walletId:r.walletId, categoryId:r.categoryId,
         amount:r.amount, note:r.name+(r.frequency==='once'?' (مجدولة)':' (متكرر)'), date:r.nextDate, recurringId:r.id
@@ -1422,6 +1445,7 @@ function renderDashboard(){
   // budget streak
   renderHealthScore();
   renderWeeklyChallenge();
+  renderBackupReminder();
   const streakEl = document.getElementById('streakBadge');
   if(streakEl){
     const streak = calcAppOpenStreak();
@@ -1449,7 +1473,7 @@ function renderDashboard(){
   } else tplWrap.innerHTML='';
 
   // low balance alerts
-  const lowWallets = state.wallets.filter(w=> w.lowBalanceAlert!=null && walletBalance(w.id) < w.lowBalanceAlert);
+  const lowWallets = liveWallets().filter(w=> w.lowBalanceAlert!=null && walletBalance(w.id) < w.lowBalanceAlert);
   const lowWrap = document.getElementById('lowBalanceAlertWrap');
   if(lowWallets.length>0){
     lowWrap.innerHTML = `<div class="card" style="margin-top:10px;border-color:var(--red);">
@@ -1662,9 +1686,9 @@ function initWalletDrag(){
 }
 function renderWallets(){
   const wrap = document.getElementById('walletsList');
-  if(state.wallets.length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك','👛'); return; }
-  const active = state.wallets.filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
-  const archived = state.wallets.filter(w=>w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+  if(liveWallets().length===0){ wrap.innerHTML = emptyStateHTML('مفيش محافظ','ضيف أول محفظة ليك','👛'); return; }
+  const active = liveWallets().filter(w=>!w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
+  const archived = liveWallets().filter(w=>w.archived).sort((a,b)=>(a.order||0)-(b.order||0));
   const unclassified = active.filter(w=>!w.walletType);
   const classifyBanner = unclassified.length>0 ? `<div class="card card-tip" style="margin-bottom:12px;">
     <div style="font-weight:800;font-size:13px;margin-bottom:6px;">🏷️ حدد نوع محافظك</div>
@@ -1705,12 +1729,13 @@ function renderWallets(){
   initWalletDrag();
 }
 function moveWalletOrder(id, dir){
-  const sorted = [...state.wallets].sort((a,b)=>(a.order||0)-(b.order||0));
+  const sorted = sortedWallets();
   const idx = sorted.findIndex(w=>w.id===id);
   const swapIdx = idx+dir;
-  if(swapIdx<0 || swapIdx>=sorted.length) return;
+  if(idx<0 || swapIdx<0 || swapIdx>=sorted.length) return;
   [sorted[idx], sorted[swapIdx]] = [sorted[swapIdx], sorted[idx]];
-  sorted.forEach((w,i)=>{ w.order=i; });
+  const rest = state.wallets.filter(w=>!sorted.includes(w)).sort((a,b)=>(a.order||0)-(b.order||0));
+  [...sorted, ...rest].forEach((w,i)=>{ w.order=i; });
   save(); renderWallets(); haptic(8);
 }
 
@@ -1786,6 +1811,9 @@ function openSearch(){
   setTimeout(()=>document.getElementById('liveSearchInput')?.focus(),320);
   renderLiveSearch();
 }
+function normArabic(s){
+  return (s||'').toString().toLowerCase().replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/[\u064B-\u0652\u0640]/g,'').replace(/^ال/,'').replace(/\sال/g,' ');
+}
 function tryAnswerNaturalQuery(ql){
   const wantsHowMuch = /كام|قد ايه|قد إيه|اجمالي|إجمالي/.test(ql);
   if(!wantsHowMuch) return null;
@@ -1815,12 +1843,22 @@ function tryAnswerNaturalQuery(ql){
   } else {
     const r = currentMonthRange(); start=r.start; end=r.end; periodLabel='الشهر ده';
   }
-  let matchedCat = null;
-  state.categories.forEach(c=>{ if(c.type===type && ql.includes(c.name.toLowerCase())) matchedCat = c; });
+  // Match a category by its full name, or by any of its words
+  // ("كام صرفت على الأكل" finds "أكل ومشروبات").
+  const words = str => normArabic(str).split(/[\s،,؟?\/]+/).map(w=>w.replace(/^و(?=..)/,'').replace(/^ال(?=..)/,'')).filter(w=>w.length>=3);
+  const nq = normArabic(ql), qWords = new Set(words(ql));
+  let matchedCat = null, bestScore = 0;
+  state.categories.forEach(c=>{
+    if(c.type!==type) return;
+    const nn = normArabic(c.name);
+    const score = (nn.length>=2 && nq.includes(nn)) ? 100+nn.length : words(c.name).filter(w=>qWords.has(w)).length;
+    if(score>bestScore){ bestScore=score; matchedCat=c; }
+  });
+  const fam = matchedCat ? categoryFamily(matchedCat.id) : null;
   let total = 0, count=0;
   state.transactions.forEach(t=>{
     if(t.type!==type || t.date<start || t.date>end) return;
-    if(matchedCat && t.categoryId!==matchedCat.id) return;
+    if(fam && !fam.has(t.categoryId)) return;
     const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
     total += toBase(t.amount,cur); count++;
   });
@@ -1848,10 +1886,11 @@ function renderLiveSearch(){
   if(!q){
     list = [...state.transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   } else {
+    const nq = normArabic(q);
+    const has = v => v && normArabic(v).includes(nq);
     list = state.transactions.filter(t=>{
       const c = catById(t.categoryId); const w = walletById(t.walletId);
-      const tagMatch = (t.tags||[]).some(tg=>tg.toLowerCase().includes(q));
-      return (t.note||'').toLowerCase().includes(q) || (c&&c.name.toLowerCase().includes(q)) || (w&&w.name.toLowerCase().includes(q)) || String(t.amount).includes(q) || tagMatch;
+      return has(t.note) || has(t.place) || (c&&has(c.name)) || (w&&has(w.name)) || String(t.amount).includes(q) || (t.tags||[]).some(has);
     }).sort((a,b)=>b.date.localeCompare(a.date));
   }
   if(list.length===0 && !answerHTML){ wrap.innerHTML = emptyStateHTML('مفيش نتائج','جرب كلمة تانية، أو اسأل سؤال زي "كام صرفت على الأكل الشهر ده؟"'); return; }
@@ -1968,6 +2007,42 @@ function periodRange(){
   else { start=new Date(now.getFullYear(),0,1); }
   return { start: localDateStr(start), end: localDateStr(now) };
 }
+function previousComparablePeriod(start, end){
+  if(reportPeriod==='week'){
+    const s=new Date(start+'T00:00:00'); s.setDate(s.getDate()-7);
+    const e=new Date(end+'T00:00:00'); e.setDate(e.getDate()-7);
+    return {start:localDateStr(s), end:localDateStr(e)};
+  }
+  const months = reportPeriod==='year' ? 12 : 1;
+  return {start:addMonthsClamped(start, -months), end:addMonthsClamped(end, -months)};
+}
+/* Month-end projection. Only day-to-day spending is extrapolated; fixed
+   items (recurring bills, installments) count once, plus the recurring
+   expenses still scheduled before the month ends. */
+function projectMonthEnd(){
+  const now = new Date();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const {start,end} = currentMonthRange();
+  const today = todayStr();
+  let variable=0, fixed=0, incomeSoFar=0;
+  state.transactions.forEach(t=>{
+    if(t.date<start||t.date>today) return;
+    const v = toBase(t.amount, walletCur(t.walletId));
+    if(t.type==='income') incomeSoFar += v;
+    if(t.type==='expense'){ if(t.recurringId||t.installmentId) fixed += v; else variable += v; }
+  });
+  let upcoming = 0;
+  state.recurring.forEach(r=>{
+    if(r.paused || r.type!=='expense') return;
+    let d = r.nextDate, guard=0;
+    while(d<=end && guard<400){ if(d>today) upcoming += toBase(r.amount, walletCur(r.walletId)); if(r.frequency==='once') break; d = addInterval(d, r.frequency, r.anchorDay); guard++; }
+  });
+  const dailyAvg = variable/Math.max(1,dayOfMonth);
+  const spentSoFar = variable + fixed;
+  const projectedSpend = spentSoFar + dailyAvg*(daysInMonth-dayOfMonth) + upcoming;
+  return {spentSoFar, incomeSoFar, dailyAvg, projectedSpend, upcoming};
+}
 /* ---- End-of-month forecast ---- */
 function renderForecast(){
   const host = document.getElementById('forecastCard');
@@ -1976,16 +2051,9 @@ function renderForecast(){
   const dayOfMonth = now.getDate();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
   const {start,end} = currentMonthRange();
-  let spentSoFar = 0, incomeSoFar = 0;
-  state.transactions.forEach(t=>{
-    if(t.date<start||t.date>end) return;
-    const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
-    if(t.type==='expense') spentSoFar += toBase(t.amount,cur);
-    if(t.type==='income') incomeSoFar += toBase(t.amount,cur);
-  });
+  const p = projectMonthEnd();
+  const {spentSoFar, incomeSoFar, dailyAvg, projectedSpend} = p;
   if(spentSoFar<=0){ host.innerHTML=''; return; }
-  const dailyAvg = spentSoFar/Math.max(1,dayOfMonth);
-  const projectedSpend = dailyAvg*daysInMonth;
   const projectedNet = incomeSoFar - projectedSpend;
   host.innerHTML = `<div class="card" style="margin-top:10px;">
     <div style="font-weight:800;font-size:13.5px;margin-bottom:8px;">🔮 توقع نهاية الشهر</div>
@@ -2218,7 +2286,8 @@ function computeHealthScore(){
     state.budgets.forEach(b=>{ if(monthSpentForCategory(b.categoryId)<=b.limit) withinCount++; });
     budgetScore = (withinCount/state.budgets.length)*25;
   }
-  const oweTotal = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const oweTotal = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency),0)
+    + state.installments.reduce((s,ins)=> s + Math.max(0,(ins.numInstallments-ins.paidCount)*ins.installmentAmount), 0);
   const walletTotal = totalBaseBalance();
   let debtScore = 20;
   if(oweTotal>0){
@@ -2228,7 +2297,7 @@ function computeHealthScore(){
   const avgExp = calcAvgMonthlyExpense();
   let runwayScore = 12.5, runwayMonths = null;
   if(avgExp>0){
-    runwayMonths = walletTotal/avgExp;
+    runwayMonths = Math.max(0, walletTotal)/avgExp;
     runwayScore = Math.max(0, Math.min(25, (runwayMonths/6)*25));
   }
   const total = Math.max(0, Math.min(100, Math.round(savingsScore+budgetScore+debtScore+runwayScore)));
@@ -2415,11 +2484,9 @@ function exportMonthlySummaryImage(){
   ctx.fillText('صُنع بواسطة SAM Finance', W/2, H-50);
 
   const dataUrl = canvas.toDataURL('image/png');
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = 'sam-finance-'+monthLabel.replace(' ','-')+'.png';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('اتصدرت الصورة ✓');
+  const bin = atob(dataUrl.split(',')[1]); const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  shareOrDownload(new Blob([bytes],{type:'image/png'}), 'sam-finance-'+monthLabel.replace(' ','-')+'.png').then(done=>{ if(done) toast('اتصدرت الصورة ✓'); });
 }
 
 function exportPDFReport(){
@@ -2484,24 +2551,25 @@ function renderReports(){
   });
   document.getElementById('repIncome').textContent = fmt(inc);
   document.getElementById('repExpense').textContent = fmt(exp);
-  const days = Math.max(1, Math.round((new Date(end)-new Date(start))/86400000)+1);
+  const days = Math.max(1, Math.round((new Date(end+'T00:00:00')-new Date(start+'T00:00:00'))/86400000)+1);
   document.getElementById('repDaily').textContent = fmt(exp/days);
 
-  // compare with previous equal period
-  const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate()-1);
-  const prevStart = new Date(prevEnd); prevStart.setDate(prevEnd.getDate()-days+1);
+  // Compare like with like: the same stretch of the previous week / month / year
+  // (1-19 Nov vs 1-19 Oct), not just the N days right before this period.
+  const {start:ds, end:de} = previousComparablePeriod(start, end);
   let prevExp=0;
   state.transactions.forEach(t=>{
     if(t.type!=='expense') return;
-    const ds = localDateStr(prevStart), de = localDateStr(prevEnd);
     if(t.date>=ds && t.date<=de) prevExp += toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency);
   });
+  const cmpLbl = document.getElementById('repCompareLabel');
+  if(cmpLbl) cmpLbl.textContent = {week:'مقارنة بالأسبوع اللي فات', month:'مقارنة بنفس الفترة الشهر اللي فات', year:'مقارنة بنفس الفترة السنة اللي فاتت'}[reportPeriod]||'مقارنة بالفترة اللي فاتت';
   const cmpEl = document.getElementById('repCompare');
   if(prevExp===0){ cmpEl.textContent='—'; cmpEl.style.color='var(--ink)'; }
   else {
     const diff = ((exp-prevExp)/prevExp)*100;
     cmpEl.textContent = (diff>=0?'+':'')+diff.toFixed(0)+'%';
-    cmpEl.style.color = diff>0 ? 'var(--red)' : 'var(--brand-2)';
+    cmpEl.style.color = diff>0 ? 'var(--red)' : 'var(--income)';
   }
 
   renderPieChart(byCat, exp);
@@ -2614,7 +2682,7 @@ function renderNetWorthChart(){
   const points = months.map(d=>{
     const endOfMonth = localDateStr(new Date(d.getFullYear(), d.getMonth()+1, 0));
     let net = 0;
-    state.wallets.forEach(w=>{
+    liveWallets().forEach(w=>{
       let bal = 0;
       state.transactions.forEach(t=>{
         if(t.date>endOfMonth) return;
@@ -2629,7 +2697,8 @@ function renderNetWorthChart(){
     });
     return net;
   });
-  if(points.length>0) points[points.length-1] += totalAssetsBase();
+  // Wallet balances only: past asset values aren't known, so adding today's
+  // assets to the last point would draw a fake jump. Assets are shown below.
   const W=300,H=120,pad=8;
   const max = Math.max(...points, 1), min = Math.min(...points, 0);
   const range = Math.max(1, max-min);
@@ -2652,7 +2721,7 @@ function renderNetWorthChart(){
     ${coords.map((c,i)=> i===coords.length-1 ? `<circle cx="${c[0]}" cy="${c[1]}" r="4" fill="var(--brand-2)"/>`:'').join('')}
     ${monthShortLabels.map((l,i)=> i%2===0 ? `<text x="${coords[i][0]}" y="${H+16}" font-size="9" fill="var(--ink-faint)" text-anchor="middle">${l}</text>` : '').join('')}
   </svg>
-  <div style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:6px;">دلوقتي (محافظ + أصول): <b style="color:var(--ink);">${fmt(points[points.length-1])} ${state.settings.baseCurrency}</b></div>`;
+  <div style="text-align:center;font-size:12px;color:var(--ink-faint);margin-top:6px;" class="money">المحافظ دلوقتي: <b style="color:var(--ink);">${fmt(points[points.length-1])}</b>${state.assets.some(a=>!a.sold)?` · + أصول <b style="color:var(--gold);">${fmt(totalAssetsBase())}</b> = <b style="color:var(--ink);">${fmt(points[points.length-1]+totalAssetsBase())}</b>`:''} ${state.settings.baseCurrency}</div>`;
 }
 
 /* ---- Spending DNA radar chart ---- */
@@ -3016,7 +3085,7 @@ function debtsPanelHTML(){
     <div class="stat-box"><div class="sv money" style="color:var(--red);">${fmt(owe)}</div><div class="sl">باقي عليك</div></div>
     <div class="stat-box"><div class="sv money" style="color:var(--income);">${fmt(owed)}</div><div class="sl">باقي ليك</div></div>
   </div>`;
-  const oweDebts = state.debts.filter(d=>d.direction==='owe'&&!d.settled).map(d=>({...d, remaining: d.amount-(d.paidAmount||0)})).sort((a,b)=>a.remaining-b.remaining);
+  const oweDebts = state.debts.filter(d=>d.direction==='owe'&&!d.settled).map(d=>({...d, remaining: toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency)})).sort((a,b)=>a.remaining-b.remaining);
   if(oweDebts.length>1){
     html += `<div class="card card-tip" style="margin-bottom:14px;">
       <div style="font-weight:800;font-size:13px;margin-bottom:6px;">💡 خطة سداد ذكية</div>
@@ -3091,7 +3160,7 @@ function saveDebt(id){
     state.debts.push(debt);
     if(walletId){
       const txType = direction==='owe' ? 'income' : 'expense';
-      state.transactions.push({id:uid(), type:txType, walletId, categoryId: direction==='owe'?'cat_debt_in':'cat_debt_out', amount, note:'دين: '+person, date:todayStr(), debtId:debt.id});
+      state.transactions.push({id:uid(), type:txType, walletId, categoryId: direction==='owe'?'cat_debt_in':'cat_debt_out', amount:moneyIntoWallet(amount, currency, walletId), note:'دين: '+person, date:todayStr(), debtId:debt.id});
     }
   }
   save(); closeModal(); renderAll(); toast('اتحفظ');
@@ -3104,13 +3173,24 @@ function openDebtPaymentForm(id){
     <div class="sheet-handle"></div>
     <div class="sheet-title">تسجيل دفعة: ${esc(d.person)}</div>
     <div style="font-size:12.5px;color:var(--ink-faint);margin-bottom:12px;">${d.direction==='owe'?'هتدفع من محفظتك':'هتقبض في محفظتك'} · متبقي ${fmt(remaining)} ${d.currency}</div>
-    <div class="field"><label>المبلغ</label><input id="debtPayAmount" type="text" inputmode="decimal" value="${remaining}" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    <div class="field"><label>المبلغ (${d.currency})</label><input id="debtPayAmount" type="text" inputmode="decimal" value="${remaining}" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateCrossCurPreview('debtPayAmount','debtPayWalletChips','${d.currency}','debtPayPreview')"></div>
     <div class="field"><label>المحفظة</label>
-      <div class="chip-select" id="debtPayWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'debtPayWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="debtPayWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'debtPayWalletChips');updateCrossCurPreview('debtPayAmount','debtPayWalletChips','${d.currency}','debtPayPreview')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="cross-cur-hint" id="debtPayPreview"></div>
     </div>
     <div class="field"><label>التاريخ</label><input id="debtPayDate" type="date" value="${todayStr()}"></div>
     <button class="btn-primary" onclick="saveDebtPayment('${d.id}')">تسجيل الدفعة</button>
   `);
+  updateCrossCurPreview('debtPayAmount','debtPayWalletChips',d.currency,'debtPayPreview');
+}
+/* Under an amount typed in one currency, show what actually leaves/enters
+   the selected wallet when that wallet uses a different currency. */
+function updateCrossCurPreview(inputId, chipsId, fromCur, hintId){
+  const hint = document.getElementById(hintId); if(!hint) return;
+  const amt = parseFloat(document.getElementById(inputId)?.value)||0;
+  const wSel = document.getElementById(chipsId)?.querySelector('.sel');
+  if(!wSel || !amt || walletCur(wSel.dataset.w)===fromCur){ hint.textContent=''; return; }
+  hint.textContent = '≈ '+fmt(moneyIntoWallet(amt, fromCur, wSel.dataset.w))+' '+walletCur(wSel.dataset.w)+' في المحفظة دي';
 }
 function saveDebtPayment(id){
   const d = state.debts.find(x=>x.id===id);
@@ -3122,7 +3202,7 @@ function saveDebtPayment(id){
   if(!wSel){toast('اختار محفظة');return;}
   if(!date){toast('اختار تاريخ');return;}
   const txType = d.direction==='owe' ? 'expense' : 'income';
-  state.transactions.push({id:uid(), type:txType, walletId:wSel.dataset.w, categoryId: d.direction==='owe'?'cat_debt_out':'cat_debt_in', amount, note:'سداد دين: '+d.person, date, debtId:d.id, debtPayment:true});
+  state.transactions.push({id:uid(), type:txType, walletId:wSel.dataset.w, categoryId: d.direction==='owe'?'cat_debt_out':'cat_debt_in', amount:moneyIntoWallet(amount, d.currency, wSel.dataset.w), linkAmount:amount, note:'سداد دين: '+d.person, date, debtId:d.id, debtPayment:true});
   d.paidAmount = (d.paidAmount||0) + amount;
   const justSettled = !d.settled && d.paidAmount >= d.amount - 0.001;
   if(d.paidAmount >= d.amount - 0.001){ d.settled = true; d.paidAmount = d.amount; }
@@ -3191,9 +3271,10 @@ function openGoalMoveForm(id, mode){
   openModal(`
     <div class="sheet-handle"></div>
     <div class="sheet-title">${isContribute?'ساهم في':'اسحب من'}: ${esc(g.name)}</div>
-    <div class="field"><label>المبلغ (${g.currency})</label><input id="goalMoveAmount" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)"></div>
+    <div class="field"><label>المبلغ (${g.currency})</label><input id="goalMoveAmount" type="text" inputmode="decimal" placeholder="0.00" onblur="evalCalcField(this)" oninput="updateCrossCurPreview('goalMoveAmount','goalMoveWalletChips','${g.currency}','goalMovePreview')"></div>
     <div class="field"><label>${isContribute?'من محفظة':'إلى محفظة'}</label>
-      <div class="chip-select" id="goalMoveWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'goalMoveWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="chip-select" id="goalMoveWalletChips">${sortedWallets().map((w,i)=>`<button type="button" class="${i===0?'sel':''}" data-w="${w.id}" onclick="selectChip(this,'goalMoveWalletChips');updateCrossCurPreview('goalMoveAmount','goalMoveWalletChips','${g.currency}','goalMovePreview')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+      <div class="cross-cur-hint" id="goalMovePreview"></div>
     </div>
     <button class="btn-primary" onclick="saveGoalMove('${g.id}','${mode}')">${isContribute?'تسجيل المساهمة':'تسجيل السحب'}</button>
   `);
@@ -3209,10 +3290,10 @@ function saveGoalMove(id, mode){
   const date = todayStr();
   const wasAchieved = g.current >= g.target;
   if(mode==='contribute'){
-    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_savings', amount, note:'مساهمة: '+g.name, date, goalId:g.id});
+    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_savings', amount:moneyIntoWallet(amount, g.currency, walletId), linkAmount:amount, note:'مساهمة: '+g.name, date, goalId:g.id});
     g.current = (g.current||0) + amount;
   } else {
-    state.transactions.push({id:uid(), type:'income', walletId, categoryId:'cat_savings_back', amount, note:'سحب من: '+g.name, date, goalId:g.id});
+    state.transactions.push({id:uid(), type:'income', walletId, categoryId:'cat_savings_back', amount:moneyIntoWallet(amount, g.currency, walletId), linkAmount:amount, note:'سحب من: '+g.name, date, goalId:g.id});
     g.current = Math.max(0, (g.current||0) - amount);
   }
   const justAchieved = !wasAchieved && g.current >= g.target;
@@ -3476,7 +3557,7 @@ function saveAsset(id){
   const walletChip = document.getElementById('assetWalletChips')?.querySelector('.sel');
   const walletId = walletChip && walletChip.dataset.w ? walletChip.dataset.w : null;
   if(walletId && purchasePrice>0){
-    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_asset_buy', amount: kind==='manual'?parseFloat(document.getElementById('assetValue').value):purchasePrice, note:'شراء: '+name, date:todayStr(), assetId:newAsset.id});
+    state.transactions.push({id:uid(), type:'expense', walletId, categoryId:'cat_asset_buy', amount: moneyIntoWallet(purchasePrice, state.settings.baseCurrency, walletId), note:'شراء: '+name, date:todayStr(), assetId:newAsset.id});
   }
   save(); closeModal(); renderAll(); toast('اتحفظ الأصل');
 }
@@ -3535,7 +3616,7 @@ function confirmSellAsset(id){
   const wSel = document.getElementById('sellWalletChips').querySelector('.sel');
   if(!price||price<=0){ toast('اكتب سعر بيع صحيح'); return; }
   if(!wSel){ toast('اختار محفظة'); return; }
-  state.transactions.push({id:uid(), type:'income', walletId:wSel.dataset.w, categoryId:'cat_asset_sell', amount:price, note:'بيع: '+a.name, date:todayStr(), assetId:a.id});
+  state.transactions.push({id:uid(), type:'income', walletId:wSel.dataset.w, categoryId:'cat_asset_sell', amount:moneyIntoWallet(price, state.settings.baseCurrency, wSel.dataset.w), linkAmount:price, note:'بيع: '+a.name, date:todayStr(), assetId:a.id});
   a.sold = true; a.soldDate = todayStr(); a.salePrice = price;
   save(); closeModal(); renderAll(); toast('اتسجل البيع ✓');
 }
@@ -3595,6 +3676,8 @@ function saveCategory(id){
   const icon = iconBtn?iconBtn.dataset.i:(type==='income'?'💰':'🧾');
   if(id){
     const existing = state.categories.find(c=>c.id===id);
+    if(existing.type!==type && state.transactions.some(t=>t.categoryId===id)){ toast('التصنيف عليه حركات، مينفعش تغير نوعه من صرف لدخل أو العكس'); return; }
+    if(parentId && state.categories.some(c=>c.parentId===id)){ toast('التصنيف ده عنده تصنيفات فرعية، فمينفعش يبقى فرعي هو كمان'); return; }
     Object.assign(existing, {name,type,icon,parentId});
   } else {
     const color = COLORS[state.categories.length % COLORS.length];
@@ -3602,9 +3685,26 @@ function saveCategory(id){
   }
   save(); closeModal(); renderAll(); toast('اتحفظ');
 }
+const PROTECTED_CATS = ['cat_other_e','cat_other_i','cat_debt_in','cat_debt_out','cat_installment','cat_savings','cat_savings_back','cat_asset_buy','cat_asset_sell'];
+/* Deleting a category never leaves transactions pointing at nothing:
+   they move to the parent (for a sub-category) or to "أخرى". */
 function deleteCategory(id){
-  const inUse = state.transactions.some(t=>t.categoryId===id);
-  if(inUse && !confirm('التصنيف ده مستخدم في حركات موجودة. تحذفه برضه؟')) return;
+  const cat = catById(id); if(!cat) return;
+  if(PROTECTED_CATS.includes(id)){ toast('التصنيف ده بيستخدمه التطبيق نفسه، مينفعش يتمسح'); return; }
+  const fallbackId = (cat.parentId && catById(cat.parentId)) ? cat.parentId : (cat.type==='income'?'cat_other_i':'cat_other_e');
+  const fallback = catById(fallbackId);
+  const used = state.transactions.filter(t=>t.categoryId===id).length;
+  const children = state.categories.filter(c=>c.parentId===id);
+  let msg = 'تمسح تصنيف "'+cat.name+'"؟';
+  if(used) msg += '\n'+used+' حركة هتتنقل لـ "'+(fallback?fallback.name:'أخرى')+'".';
+  if(children.length) msg += '\nالتصنيفات الفرعية ('+children.map(c=>c.name).join('، ')+') هتبقى تصنيفات رئيسية.';
+  if(!confirm(msg)) return;
+  const moveRef = o=>{ if(o && o.categoryId===id) o.categoryId = fallbackId; };
+  state.transactions.forEach(moveRef);
+  (state.recurring||[]).forEach(moveRef);
+  (state.templates||[]).forEach(moveRef);
+  (state.places||[]).forEach(p=>{ if(p.lastCategoryId===id) p.lastCategoryId = fallbackId; });
+  children.forEach(c=>{ c.parentId = null; });
   state.categories = state.categories.filter(c=>c.id!==id);
   state.budgets = state.budgets.filter(b=>b.categoryId!==id);
   save(); closeModal(); renderAll(); toast('اتمسح');
@@ -3629,12 +3729,13 @@ function currenciesPanelHTML(){
       </button>
     </div>
     ${auto?`<button class="btn-secondary" onclick="fetchLiveRates(true)">🔄 تحديث الأسعار دلوقتي</button>`:''}
+    ${(state.settings.ratesNeedReview||[]).length?`<div class="card card-tip" style="margin-top:12px;"><div style="font-weight:800;font-size:13px;">⚠️ أسعار محتاجة تتحدد</div><div style="font-size:12px;color:var(--ink-dim);margin-top:4px;">${state.settings.ratesNeedReview.join('، ')} مالهاش سعر صرف محفوظ، فمتحسوبة مؤقتًا 1 = 1. حدّث الأسعار أو اكتب سعرها بنفسك.</div></div>`:''}
     <div class="section-title">أسعار الصرف ${auto?'':'<span class="link" onclick="openAddCurrencyForm()">+ عملة جديدة</span>'}</div>
     <div class="card">
       ${Object.keys(rates).map(c=>`
         <div style="display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--border);">
           <div style="font-weight:800;width:70px;font-size:13px;">1 ${c} =</div>
-          <input type="number" value="${rates[c]}" style="flex:1;" ${(c===state.settings.baseCurrency||auto)?'disabled':''} onchange="updateRate('${c}',this.value)">
+          <input type="number" step="any" value="${+(+rates[c]).toFixed(4)}" style="flex:1;" ${(c===state.settings.baseCurrency||auto)?'disabled':''} onchange="updateRate('${c}',this.value)">
           <div style="font-size:12px;color:var(--ink-faint);width:38px;">${state.settings.baseCurrency}</div>
         </div>`).join('')}
     </div>
@@ -3648,15 +3749,46 @@ function toggleRatesAuto(){
   if(state.settings.ratesAutoUpdate) fetchLiveRates(true);
   openPanel('currencies');
 }
-function changeBaseCurrency(c){ state.settings.baseCurrency=c; save(); renderAll(); if(state.settings.ratesAutoUpdate) fetchLiveRates(false); openPanel('currencies'); toast('اتغيرت العملة الأساسية'); }
-function updateRate(c,val){ state.settings.rates[c]=parseFloat(val)||1; save(); renderAll(); }
+function changeBaseCurrency(c){
+  const oldBase = state.settings.baseCurrency;
+  if(c===oldBase) return;
+  const r = state.settings.rates;
+  // 1 old-base = f new-base. Values stored "in base currency" keep their real worth.
+  const f = (r[oldBase]||1) / (r[c]||1);
+  const conv = v => (v==null||isNaN(v)) ? v : Math.round(v*f*100)/100;
+  state.budgets.forEach(b=>{ b.limit = conv(b.limit); });
+  state.installments.forEach(i=>{ i.installmentAmount = conv(i.installmentAmount); });
+  if(state.weeklyChallenge && state.weeklyChallenge.target) state.weeklyChallenge.target = conv(state.weeklyChallenge.target);
+  state.assets.forEach(a=>{
+    if(a.purchasePricePerGram!=null) a.purchasePricePerGram = conv(a.purchasePricePerGram);
+    if(a.kind==='electronics'){ a.purchasePrice = conv(a.purchasePrice); if(a.manualOverrideValue!=null) a.manualOverrideValue = conv(a.manualOverrideValue); }
+    if(a.salePrice!=null) a.salePrice = conv(a.salePrice);
+  });
+  // Rebase the table: every rate becomes "units of the new base per 1 unit".
+  const k = r[c]||1;
+  Object.keys(r).forEach(code=>{ r[code] = r[code]/k; });
+  r[c] = 1;
+  state.settings.baseCurrency = c;
+  save(); renderAll(); if(state.settings.ratesAutoUpdate) fetchLiveRates(false); openPanel('currencies');
+  toast('اتغيرت العملة الأساسية واتحولت الميزانيات والقيم ليها');
+}
+function updateRate(c,val){
+  const v = parseFloat(val);
+  if(c===state.settings.baseCurrency){ openPanel('currencies'); return; }
+  if(!(v>0)){ toast('اكتب سعر صحيح أكبر من صفر'); openPanel('currencies'); return; }
+  state.settings.rates[c]=v;
+  state.settings.ratesNeedReview = (state.settings.ratesNeedReview||[]).filter(x=>x!==c);
+  save(); renderAll();
+}
 function openAddCurrencyForm(){
   const code = prompt('اكتب كود العملة (مثال: KWD)');
   if(!code) return;
   const c = code.toUpperCase().trim();
+  if(!/^[A-Z]{3}$/.test(c)){ toast('كود العملة لازم يكون 3 حروف إنجليزي (زي KWD)'); return; }
   if(state.settings.rates[c]){ toast('العملة دي موجودة بالفعل'); return; }
-  const rate = prompt('سعر صرفها مقابل 1 '+state.settings.baseCurrency);
-  state.settings.rates[c] = parseFloat(rate)||1;
+  const rate = parseFloat(prompt('1 '+c+' = كام '+state.settings.baseCurrency+'؟'));
+  if(!(rate>0)){ toast('اكتب سعر صحيح أكبر من صفر'); return; }
+  state.settings.rates[c] = rate;
   save(); openPanel('currencies'); toast('اتضافت العملة');
 }
 function fmtDateTime(iso){
@@ -3716,7 +3848,8 @@ async function setupFaceId(){
     toast('لغيت التفعيل أو حصل خطأ');
   }
 }
-function disableFaceId(){
+function disableFaceId(){ withCurrentPin(disableFaceIdNow); }
+function disableFaceIdNow(){
   state.settings.faceIdEnabled=false; state.settings.faceIdCredentialId=null; save(); openPanel('security'); toast('اتلغى');
 }
 async function tryFaceIdUnlock(){
@@ -3737,20 +3870,40 @@ async function tryFaceIdUnlock(){
     return true;
   }catch(e){ return false; }
 }
-function toggleAutoLock(){ state.settings.autoLockOnBackground=!state.settings.autoLockOnBackground; save(); openPanel('security'); }
+function toggleAutoLock(){
+  const flip = ()=>{ state.settings.autoLockOnBackground=!state.settings.autoLockOnBackground; save(); openPanel('security'); };
+  if(state.settings.autoLockOnBackground) withCurrentPin(flip); else flip();
+}
 function togglePrivacyMode(){
   document.body.classList.toggle('privacy-on');
   toast(document.body.classList.contains('privacy-on') ? 'اتفعل وضع الخصوصية 🙈' : 'اتلغى وضع الخصوصية');
 }
-function setupPin(){
-  pinCapture(pin1=>{
-    pinCapture(pin2=>{
-      if(pin1!==pin2){ toast('الرمزين مش متطابقين'); return; }
-      state.settings.pin = pin1; save(); toast('اتفعل القفل'); openPanel('security');
-    }, 'أكد الرمز السري');
-  }, 'اكتب رمز جديد (4 أرقام)');
+/* Changing or switching off the lock always asks for the current PIN, so
+   someone holding the unlocked phone can't quietly turn it off. */
+function withCurrentPin(action){
+  if(!state.settings.pin){ action(); return; }
+  pinCapture(entered=>{
+    if(entered===state.settings.pin) action();
+    else toast('الرمز الحالي غلط');
+  }, 'اكتب الرمز الحالي');
 }
-function removePin(){ state.settings.pin=null; save(); toast('اتلغى القفل'); openPanel('security'); }
+function setupPin(){
+  withCurrentPin(()=>{
+    pinCapture(pin1=>{
+      pinCapture(pin2=>{
+        if(pin1!==pin2){ toast('الرمزين مش متطابقين، جرب تاني'); return; }
+        state.settings.pin = pin1; state.settings.pinFails = 0; save(); toast('اتفعل القفل'); openPanel('security');
+      }, 'أكد الرمز السري');
+    }, 'اكتب رمز جديد (4 أرقام)');
+  });
+}
+function removePin(){
+  withCurrentPin(()=>{ state.settings.pin=null; state.settings.faceIdEnabled=false; state.settings.faceIdCredentialId=null; save(); toast('اتلغى القفل'); openPanel('security'); });
+}
+function cancelPinCapture(){
+  document.getElementById('pinlock').classList.remove('active');
+  document.getElementById('pinCancel').style.display='none';
+}
 function pinCapture(cb, title){
   let entered='';
   const overlay = document.getElementById('pinlock');
@@ -3762,9 +3915,10 @@ function pinCapture(cb, title){
     if(entered.length>=4) return;
     entered+=digit; renderPinDots(entered.length);
     if(entered.length===4){
-      setTimeout(()=>{ overlay.classList.remove('active'); cb(entered); },150);
+      setTimeout(()=>{ overlay.classList.remove('active'); document.getElementById('pinCancel').style.display='none'; cb(entered); },150);
     }
   });
+  document.getElementById('pinCancel').style.display='inline-block';
   overlay.classList.add('active');
 }
 function renderPinDots(n){
@@ -3789,6 +3943,12 @@ function setupAutoLock(){
     }
   });
 }
+function pinCooldownLeft(){ return Math.max(0, Math.ceil(((state.settings.pinLockUntil||0) - Date.now())/1000)); }
+function showPinCooldown(){
+  const el = document.getElementById('pinError');
+  const tick = ()=>{ const left = pinCooldownLeft(); el.textContent = left>0 ? 'محاولات غلط كتير، استنى '+left+' ثانية' : ''; if(left>0) setTimeout(tick, 1000); };
+  tick();
+}
 function checkAppLock(){
   if(!state.settings.pin) return;
   document.getElementById('pinlock').classList.add('active');
@@ -3807,17 +3967,25 @@ function checkAppLock(){
 }
 function startPinEntry(){
   let entered='';
+  document.getElementById('pinCancel').style.display='none';
   document.getElementById('pinTitle').textContent='اكتب الرمز السري لفتح التطبيق';
   document.getElementById('pinError').textContent='';
+  if(pinCooldownLeft()>0) showPinCooldown();
   renderPinDots(0);
   buildPinPad((digit)=>{
     if(digit==='del'){ entered=entered.slice(0,-1); renderPinDots(entered.length); return; }
     if(entered.length>=4) return;
     entered+=digit; renderPinDots(entered.length);
     if(entered.length===4){
+      if(pinCooldownLeft()>0){ entered=''; renderPinDots(0); showPinCooldown(); return; }
       if(entered===state.settings.pin){
+        state.settings.pinFails = 0; state.settings.pinLockUntil = null; save();
         setTimeout(()=>document.getElementById('pinlock').classList.remove('active'),150);
       } else {
+        state.settings.pinFails = (state.settings.pinFails||0) + 1;
+        if(state.settings.pinFails % 5 === 0){ state.settings.pinLockUntil = Date.now() + 30000; }
+        save();
+        if(pinCooldownLeft()>0){ setTimeout(()=>{ entered=''; renderPinDots(0); showPinCooldown(); },400); return; }
         document.getElementById('pinError').textContent='الرمز غلط، جرب تاني';
         setTimeout(()=>{ entered=''; renderPinDots(0); },400);
       }
@@ -3831,7 +3999,13 @@ function backupPanelHTML(){
   const sizeKB = (new Blob([JSON.stringify(state)]).size/1024).toFixed(1);
   const limitKB = 5*1024;
   const usagePct = Math.min(100,(sizeKB/limitKB)*100);
+  const bdays = daysSinceBackup();
   return `
+    <div class="card ${bdays===null||bdays>=14?'card-tip':''}" style="margin-bottom:12px;">
+      <div style="font-weight:800;font-size:13px;">💾 آخر نسخة احتياطية</div>
+      <div style="font-size:12.5px;color:var(--ink-dim);margin-top:4px;">${bdays===null?'لسه ما اتعملتش أي نسخة':(bdays===0?'النهاردة ✓':'من '+bdays+' يوم ('+fmtDate(state.settings.lastBackupDate)+')')}</div>
+      <div style="font-size:11.5px;color:var(--ink-faint);margin-top:4px;">${storagePersisted?'التخزين محمي من المسح التلقائي ✓':'نصيحة: احفظ النسخة في Files أو iCloud Drive'}</div>
+    </div>
     <div class="card">
       <div style="font-weight:800;font-size:13px;margin-bottom:8px;">📦 المساحة المستخدمة</div>
       <div class="bm-track"><div class="bm-fill ${usagePct>80?'over':(usagePct>50?'warn':'')}" style="width:${usagePct}%;"></div></div>
@@ -3855,29 +4029,76 @@ function backupPanelHTML(){
     </div>
   `;
 }
-function exportBackup(){
-  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+/* On iPhone home-screen apps a plain download opens a dead-end preview.
+   Prefer the iOS share sheet (Save to Files / iCloud / WhatsApp...). */
+function shareOrDownload(blob, filename){
+  try{
+    const file = new File([blob], filename, {type: blob.type});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      return navigator.share({files:[file], title:filename}).then(()=>true).catch(err=>{
+        if(err && err.name==='AbortError') return false;   // user closed the sheet
+        downloadBlob(blob, filename); return true;
+      });
+    }
+  }catch(e){}
+  downloadBlob(blob, filename);
+  return Promise.resolve(true);
+}
+function downloadBlob(blob, filename){
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'sam-finance-backup-'+todayStr()+'.json';
+  a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('اتصدرت النسخة الاحتياطية');
+  setTimeout(()=>URL.revokeObjectURL(url), 10000);
+}
+function exportBackup(){
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  shareOrDownload(blob, 'sam-finance-backup-'+todayStr()+'.json').then(done=>{
+    if(!done) return;
+    state.settings.lastBackupDate = todayStr();
+    save(); renderAll(); if(currentPanel==='backup') openPanel('backup');
+    toast('اتعملت النسخة الاحتياطية ✓');
+  });
+}
+function daysSinceBackup(){
+  if(!state.settings.lastBackupDate) return null;
+  return Math.round((new Date(todayStr()+'T00:00:00') - new Date(state.settings.lastBackupDate+'T00:00:00'))/86400000);
+}
+function snoozeBackupReminder(){
+  const d = new Date(); d.setDate(d.getDate()+3);
+  state.settings.backupSnoozeUntil = localDateStr(d); save(); renderDashboard();
+}
+function renderBackupReminder(){
+  const host = document.getElementById('backupReminderWrap'); if(!host) return;
+  const days = daysSinceBackup();
+  const due = state.transactions.length >= 5 && (days===null || days >= 14);
+  const snoozed = state.settings.backupSnoozeUntil && state.settings.backupSnoozeUntil > todayStr();
+  if(!due || snoozed){ host.innerHTML=''; return; }
+  host.innerHTML = `<div class="card card-tip" style="margin-top:12px;">
+    <div style="display:flex;gap:10px;align-items:flex-start;">
+      <div style="font-size:20px;">💾</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:800;">${days===null?'لسه ما عملتش نسخة احتياطية':'آخر نسخة احتياطية من '+days+' يوم'}</div>
+        <div style="font-size:11.5px;color:var(--ink-faint);margin-top:3px;">بياناتك متخزنة على التليفون ده بس. احفظ نسخة في Files أو iCloud عشان ما تضيعش.</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn-primary" style="margin:0;padding:10px 14px;font-size:13px;flex:1 1 auto;width:auto;white-space:nowrap;" onclick="exportBackup()">اعمل نسخة دلوقتي</button>
+          <button class="btn-secondary" style="margin:0;padding:10px 16px;font-size:13px;flex:0 0 auto;width:auto;white-space:nowrap;" onclick="snoozeBackupReminder()">بعدين</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 function exportCSV(){
   const rows = [['التاريخ','النوع','المحفظة','التصنيف','المبلغ','العملة','ملاحظة']];
   const typeLabel = {income:'دخل',expense:'صرف',transfer:'تحويل'};
   [...state.transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
     const w = walletById(t.walletId);
-    const c = t.type==='transfer' ? '—' : (catById(t.categoryId)?catById(t.categoryId).name:'—');
+    const c = t.type==='transfer' ? ('تحويل إلى '+(walletById(t.toWalletId)?.name||'—')) : (catById(t.categoryId)?catById(t.categoryId).name:'—');
     rows.push([t.date, typeLabel[t.type]||t.type, w?w.name:'—', c, t.amount, w?w.currency:'', (t.note||'').replace(/,/g,';')]);
   });
   const csv = '\uFEFF' + rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'sam-finance-transactions-'+todayStr()+'.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('اتصدر ملف CSV');
+  shareOrDownload(blob, 'sam-finance-transactions-'+todayStr()+'.csv').then(done=>{ if(done) toast('اتصدر ملف CSV'); });
 }
 function importBackup(){
   const input = document.getElementById('importFile');
@@ -3890,8 +4111,9 @@ function importBackup(){
       if(!confirm('هيتم استبدال كل بياناتك الحالية. متأكد؟')) return;
       // Run the backup through the same migration as a normal app start, so
       // backups made by older versions get every field the app expects.
+      const previous = state;
       state = data;
-      if(!save()){ return; }
+      if(!save()){ state = previous; return; }
       load();
       document.documentElement.setAttribute('data-theme', state.settings.theme);
       document.body.setAttribute('data-theme', state.settings.theme);
@@ -4018,11 +4240,10 @@ function annualReportPanelHTML(){
     if(t.type==='income'){ const v=toBase(t.amount,cur); totalInc+=v; monthlyData[m].inc+=v; }
     if(t.type==='expense'){ const v=toBase(t.amount,cur); totalExp+=v; monthlyData[m].exp+=v; catTotals[t.categoryId]=(catTotals[t.categoryId]||0)+v; }
   });
-  let bestMonth=0, worstMonth=0;
-  monthlyData.forEach((m,i)=>{
-    if((m.inc-m.exp) > (monthlyData[bestMonth].inc-monthlyData[bestMonth].exp)) bestMonth=i;
-    if((m.inc-m.exp) < (monthlyData[worstMonth].inc-monthlyData[worstMonth].exp)) worstMonth=i;
-  });
+  // Only months that actually have activity (empty / future months don't compete).
+  const active = monthlyData.map((m,i)=>({i, net:m.inc-m.exp, any:m.inc>0||m.exp>0})).filter(m=>m.any);
+  let bestMonth = active.length ? active.reduce((a,b)=> b.net>a.net?b:a).i : 0;
+  let worstMonth = active.length ? active.reduce((a,b)=> b.net<a.net?b:a).i : 0;
   const topCatEntry = Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
   const topCat = topCatEntry ? catById(topCatEntry[0]) : null;
   const monthNames=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
@@ -4231,8 +4452,13 @@ function renderWhatIfResult(){
     if(t.type==='expense') spentSoFar += toBase(t.amount,cur);
     if(t.type==='income') incomeSoFar += toBase(t.amount,cur);
   });
-  const totalBudget = state.budgets.reduce((s,b)=>s+b.limit,0);
-  const remainingBefore = totalBudget>0 ? totalBudget - spentSoFar : null;
+  // Only budgets that aren't already covered by a parent category's budget,
+  // and only the spending inside those budgeted categories.
+  const budgetIds = new Set(state.budgets.map(b=>b.categoryId));
+  const topBudgets = state.budgets.filter(b=>{ const c=catById(b.categoryId); return c && !(c.parentId && budgetIds.has(c.parentId)); });
+  const totalBudget = topBudgets.reduce((s,b)=>s+b.limit,0);
+  const budgetSpent = topBudgets.reduce((s,b)=>s+monthSpentForCategory(b.categoryId),0);
+  const remainingBefore = totalBudget>0 ? totalBudget - budgetSpent : null;
   const remainingAfter = remainingBefore!==null ? remainingBefore - amount : null;
   const walletTotal = totalBaseBalance();
   const walletAfter = walletTotal - amount;
@@ -4322,7 +4548,7 @@ function confirmPayInstallment(id){
   if(!ins) return;
   const wSel = document.getElementById('insPayWalletChips').querySelector('.sel');
   if(!wSel){ toast('اختار محفظة'); return; }
-  state.transactions.push({id:uid(), type:'expense', walletId:wSel.dataset.w, categoryId:'cat_installment', amount:ins.installmentAmount, note:'قسط: '+ins.itemName, date:todayStr(), installmentId:ins.id});
+  state.transactions.push({id:uid(), type:'expense', walletId:wSel.dataset.w, categoryId:'cat_installment', amount:moneyIntoWallet(ins.installmentAmount, state.settings.baseCurrency, wSel.dataset.w), note:'قسط: '+ins.itemName, date:todayStr(), installmentId:ins.id});
   ins.paidCount++;
   const justFinished = ins.paidCount>=ins.numInstallments;
   save(); closeModal(); renderAll(); toast('اتسجل القسط ✓');
@@ -4338,7 +4564,7 @@ function calendarPanelHTML(){
   });
   state.debts.forEach(d=>{
     if(d.settled || !d.dueDate) return;
-    events.push({date:d.dueDate, icon:'🤝', label:(d.direction==='owe'?'سداد: ':'استلام: ')+d.person, sub: fmt(d.amount-(d.paidAmount||0))+' '+state.settings.baseCurrency, color:'var(--gold)', subIsMoney:true});
+    events.push({date:d.dueDate, icon:'🤝', label:(d.direction==='owe'?'سداد: ':'استلام: ')+d.person, sub: fmt(d.amount-(d.paidAmount||0))+' '+(d.currency||state.settings.baseCurrency), color:'var(--gold)', subIsMoney:true});
   });
   state.installments.forEach(ins=>{
     if(ins.paidCount>=ins.numInstallments) return;
@@ -4395,8 +4621,10 @@ function zakatPanelHTML(){
   const pricePerGram24k = state.settings.goldPricePerGramUSD ? goldPricePerGramBase(24) : 0;
   const nisabValue = pricePerGram24k * goldNisabGrams;
   const cashTotal = totalBaseBalance();
-  const goldAssetsTotal = state.assets.filter(a=>a.isGold).reduce((s,a)=>s+assetValueOf(a),0);
-  const otherAssetsTotal = state.assets.filter(a=>!a.isGold).reduce((s,a)=>s+toBase(a.value,a.currency),0);
+  // Sold items are gone, and personal-use electronics aren't zakatable.
+  const live = state.assets.filter(a=>!a.sold);
+  const goldAssetsTotal = live.filter(a=>a.kind==='gold'||a.isGold).reduce((s,a)=>s+assetValueOf(a),0);
+  const otherAssetsTotal = live.filter(a=>!(a.kind==='gold'||a.isGold) && a.kind!=='electronics').reduce((s,a)=>s+toBase(a.value||0,a.currency),0);
   const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency),0)
     + state.installments.reduce((s,ins)=> s + Math.max(0,(ins.numInstallments-ins.paidCount)*ins.installmentAmount), 0);
   const zakatableWealth = Math.max(0, cashTotal + goldAssetsTotal + otherAssetsTotal - debtsOwed);
@@ -4412,7 +4640,7 @@ function zakatPanelHTML(){
       <div style="font-weight:800;font-size:13px;margin-bottom:10px;">تفاصيل الحساب</div>
       <div class="bm-top"><span>كاش ومحافظ</span><span class="money">${fmt(cashTotal)}</span></div>
       <div class="bm-top" style="margin-top:6px;"><span>أصول دهب</span><span class="money">${fmt(goldAssetsTotal)}</span></div>
-      <div class="bm-top" style="margin-top:6px;"><span>أصول تانية</span><span class="money">${fmt(otherAssetsTotal)}</span></div>
+      <div class="bm-top" style="margin-top:6px;"><span>أصول تانية (من غير الأجهزة)</span><span class="money">${fmt(otherAssetsTotal)}</span></div>
       <div class="bm-top" style="margin-top:6px;"><span>ناقص: ديون وأقساط عليك</span><span class="money" style="color:var(--red);">-${fmt(debtsOwed)}</span></div>
     </div>
     <div class="card" style="margin-top:14px;background:${aboveNisab?'rgba(79,209,165,.1)':'var(--bg-elev-2)'};border-color:${aboveNisab?'var(--brand-2)':'var(--border)'};text-align:center;padding:20px;">
@@ -4533,23 +4761,19 @@ function saveWallet(id){
   save(); closeModal(); renderAll(); toast('اتحفظت المحفظة');
 }
 function deleteWallet(id){
-  if(state.wallets.length<=1){ toast('لازم يفضل محفظة واحدة على الأقل'); return; }
+  if(liveWallets().length<=1){ toast('لازم يفضل محفظة واحدة على الأقل'); return; }
   const hasTx = state.transactions.some(t=>t.walletId===id||t.toWalletId===id);
   if(hasTx && !confirm('المحفظة دي فيها حركات مسجلة، هتتمسح حركاتها كمان (أرصدة المحافظ التانية مش هتتأثر). لو عايز تحتفظ بتاريخها استخدم "تجميد" بدل الحذف. متأكد؟')) return;
-  // Transfers with another wallet are kept as plain income/expense on that
-  // wallet, so its balance stays exactly the same.
-  state.transactions = state.transactions.flatMap(t=>{
-    if(t.type==='transfer'){
-      if(t.walletId===id && t.toWalletId===id) return [];
-      if(t.walletId===id){ const {toWalletId,toAmount,...rest}=t; return [{...rest, type:'income', walletId:toWalletId, amount:toAmount, categoryId:'cat_other_i', note:(t.note?t.note+' · ':'')+'تحويل من محفظة اتمسحت'}]; }
-      if(t.toWalletId===id){ const {toWalletId,toAmount,...rest}=t; return [{...rest, type:'expense', categoryId:'cat_other_e', note:(t.note?t.note+' · ':'')+'تحويل لمحفظة اتمسحت'}]; }
-      return [t];
-    }
-    return t.walletId===id ? [] : [t];
-  });
+  // Transfers with another wallet must stay, or that wallet's balance would
+  // change. Keep the deleted wallet as a hidden record holding only those
+  // transfers: hidden from lists and totals, and transfers stay out of
+  // income/expense reports.
+  const keepsTransfers = state.transactions.some(t=>t.type==='transfer' && (t.walletId===id) !== (t.toWalletId===id));
+  state.transactions = state.transactions.filter(t=> t.type==='transfer' ? !(t.walletId===id && t.toWalletId===id) : t.walletId!==id);
   state.recurring.forEach(r=>{ if(r.walletId===id) r.paused = true; });
   state.templates = state.templates.filter(tp=>tp.walletId!==id);
-  state.wallets = state.wallets.filter(w=>w.id!==id);
+  if(keepsTransfers){ const w=walletById(id); w.deleted=true; w.archived=true; w.lowBalanceAlert=null; if(!/\(اتمسحت\)$/.test(w.name)) w.name += ' (اتمسحت)'; }
+  else state.wallets = state.wallets.filter(w=>w.id!==id);
   save(); closeModal(); renderAll(); toast('اتمسحت المحفظة');
 }
 function toggleArchiveWallet(id){
@@ -4831,7 +5055,7 @@ function saveTx(id){
     }
     const obj = {type, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, amount, note, date, tags, placeId};
     if(pendingReceiptData) obj.receipt = pendingReceiptData;
-    if(id){ const ex = state.transactions.find(t=>t.id===id); applyTxLink(ex, -1); Object.assign(ex, obj); applyTxLink(ex, +1); }
+    if(id){ const ex = state.transactions.find(t=>t.id===id); applyTxLink(ex, -1); Object.assign(ex, obj); const lc = linkedCurrency(ex); if(lc && (ex.linkAmount!=null || walletCur(ex.walletId)!==lc)) ex.linkAmount = Math.round(convertAmount(ex.amount, walletCur(ex.walletId), lc)*100)/100; applyTxLink(ex, +1); }
     else { state.transactions.push({id:uid(), ...obj}); }
   }
   pendingReceiptData = null;
@@ -4848,18 +5072,26 @@ function openTxDetail(id){
    contribution, an installment, an asset sale). sign=+1 applies its effect,
    sign=-1 reverses it, so delete / undo / edit keep both sides in sync. */
 function isDebtPaymentTx(t){ return t.debtPayment===true || (t.note||'').indexOf('سداد دين')===0; }
+function txLinkAmount(t){ return t.linkAmount!=null ? t.linkAmount : t.amount; }
+function linkedCurrency(t){
+  if(t.debtId){ const d=state.debts.find(x=>x.id===t.debtId); if(d) return d.currency||state.settings.baseCurrency; }
+  if(t.goalId){ const g=state.goals.find(x=>x.id===t.goalId); if(g) return g.currency||state.settings.baseCurrency; }
+  if(t.assetId) return state.settings.baseCurrency;
+  return null;
+}
 function applyTxLink(t, sign){
+  const la = txLinkAmount(t);
   if(t.debtId && isDebtPaymentTx(t)){
     const d = state.debts.find(x=>x.id===t.debtId);
     if(d){
-      d.paidAmount = Math.max(0, (d.paidAmount||0) + sign*t.amount);
+      d.paidAmount = Math.max(0, (d.paidAmount||0) + sign*la);
       if(sign<0 && d.settled && d.paidAmount < d.amount-0.001) d.settled = false;
       if(sign>0 && d.paidAmount >= d.amount-0.001){ d.settled = true; d.paidAmount = d.amount; }
     }
   }
   if(t.goalId){
     const g = state.goals.find(x=>x.id===t.goalId);
-    if(g){ const delta = t.type==='expense' ? t.amount : -t.amount; g.current = Math.max(0, (g.current||0) + sign*delta); }
+    if(g){ const delta = t.type==='expense' ? la : -la; g.current = Math.max(0, (g.current||0) + sign*delta); }
   }
   if(t.installmentId){
     const ins = state.installments.find(x=>x.id===t.installmentId);
@@ -4867,7 +5099,7 @@ function applyTxLink(t, sign){
   }
   if(t.assetId && t.categoryId==='cat_asset_sell'){
     const a = state.assets.find(x=>x.id===t.assetId);
-    if(a){ if(sign<0){ a.sold=false; a.soldDate=null; a.salePrice=null; } else { a.sold=true; a.soldDate=t.date; a.salePrice=t.amount; } }
+    if(a){ if(sign<0){ a.sold=false; a.soldDate=null; a.salePrice=null; } else { a.sold=true; a.soldDate=t.date; a.salePrice=la; } }
   }
 }
 function deleteTx(id){
@@ -5045,7 +5277,7 @@ function renderAll(){
 function updateAttentionDot(){
   const dot = document.getElementById('moreAttentionDot');
   if(!dot) return;
-  const unclassifiedWallets = state.wallets.some(w=>!w.archived && !w.walletType);
+  const unclassifiedWallets = liveWallets().some(w=>!w.archived && !w.walletType);
   const upcoming = upcomingRecurringWithin(1);
   const needsAttention = unclassifiedWallets || upcoming.length>0;
   dot.style.display = needsAttention ? 'block' : 'none';
@@ -5063,6 +5295,9 @@ function init(){
   applyFontScale();
   processRecurring();
   setTimeout(shrinkStoredReceipts, 1500);
+  if(navigator.storage && navigator.storage.persist){
+    navigator.storage.persisted().then(p=> p || navigator.storage.persist()).then(p=>{ storagePersisted = !!p; }).catch(()=>{});
+  }
   if(state.settings.pin){ checkAppLock(); }
   renderAll();
   requestAnimationFrame(()=>moveNavIndicator());
