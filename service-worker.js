@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sam-finance-v42';
+const CACHE_NAME = 'sam-finance-v43';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', event => {
@@ -19,10 +19,26 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
-  // Only manage caching for our own files. Let external requests
-  // (like the live currency rate API) pass through untouched.
+  // Only manage our own files. External requests (currency rates,
+  // gold price) pass through untouched.
   if (url.origin !== self.location.origin) return;
 
+  // The page itself: network first, so a new version shows on the very
+  // first open after an update. Falls back to the cached copy offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('./index.html', clone));
+        }
+        return response;
+      }).catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
+    );
+    return;
+  }
+
+  // Everything else (manifest, icons): cached copy first, refreshed in the background.
   event.respondWith(
     caches.match(event.request).then(cached => {
       const networkFetch = fetch(event.request).then(response => {
