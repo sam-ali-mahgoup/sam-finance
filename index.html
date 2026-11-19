@@ -127,7 +127,8 @@ body{
 
 /* ---------- SWIPE TO DELETE ---------- */
 .swipe-wrap{position:relative;overflow:hidden;border-radius:16px;margin-bottom:8px;}
-.swipe-delete-btn{position:absolute;top:0;bottom:0;right:0;width:76px;background:linear-gradient(160deg,var(--red),#a8392a);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px;gap:2px;}
+.swipe-wrap.open .swipe-delete-btn,.swipe-wrap.swiping .swipe-delete-btn{opacity:1;}
+.swipe-delete-btn{opacity:0;transition:opacity .15s;position:absolute;top:0;bottom:0;right:0;width:76px;background:linear-gradient(160deg,var(--red),#a8392a);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:11px;gap:2px;}
 .swipe-content{position:relative;transition:transform .3s cubic-bezier(.25,1,.35,1);will-change:transform;}
 .swipe-content.dragging{transition:none;}
 @font-face{
@@ -148,8 +149,8 @@ button{cursor:pointer;border:none;background:none;}
   padding:14px 16px 10px;
   position:sticky;top:0;z-index:30;
   background:color-mix(in srgb, var(--bg) 22%, transparent);
-  backdrop-filter:blur(45px) saturate(230%);
-  -webkit-backdrop-filter:blur(45px) saturate(230%);
+  backdrop-filter:blur(16px) saturate(180%);
+  -webkit-backdrop-filter:blur(16px) saturate(180%);
   border-bottom:0.5px solid color-mix(in srgb, #fff 10%, var(--border) 65%);
   box-shadow:inset 0 -1px 0 rgba(255,255,255,.03);
 }
@@ -198,7 +199,7 @@ button{cursor:pointer;border:none;background:none;}
 .hero-amount{font-size:36px;font-weight:800;color:#fff;margin:6px 0 2px;direction:ltr;text-align:right;letter-spacing:.3px;}
 .hero-amount span{font-size:16px;opacity:.7;font-weight:600;margin-right:6px;}
 .hero-sub{display:flex;gap:16px;margin-top:16px;}
-.streak-pill{margin-top:12px;background:rgba(255,255,255,.08);border-radius:11px;padding:8px 12px;font-size:12px;font-weight:800;color:var(--gold);text-align:center;}
+.streak-pill{margin-top:12px;background:rgba(255,255,255,.08);border-radius:11px;padding:8px 12px;font-size:12px;font-weight:800;color:#FFF1D0;text-align:center;}
 .networth-line{margin-top:8px;font-size:11.5px;font-weight:700;color:#C9DED6;text-align:right;cursor:pointer;}
 @keyframes confettiFall{
   0%{transform:translateY(0) rotate(0deg);opacity:1;}
@@ -212,7 +213,7 @@ button{cursor:pointer;border:none;background:none;}
 .wallet-chip{
   min-width:148px;
   background:color-mix(in srgb, var(--card) 38%, transparent);
-  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
+  backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
   border:1px solid color-mix(in srgb, #fff 10%, var(--border) 60%);
   border-radius:16px;padding:14px;flex-shrink:0;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
@@ -220,7 +221,8 @@ button{cursor:pointer;border:none;background:none;}
 }
 .wallet-chip:active{transform:scale(.96);}
 .wallet-chip .wc-top{display:flex;justify-content:space-between;align-items:flex-start;}
-.quick-transfer-btn{width:24px;height:24px;border-radius:8px;background:var(--bg-elev-2);font-size:12px;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);}
+.quick-transfer-btn{width:28px;height:28px;border-radius:9px;background:color-mix(in srgb, var(--bg-elev-2) 70%, transparent);display:flex;align-items:center;justify-content:center;color:var(--ink-dim);border:none;}
+.quick-transfer-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
 .attention-dot{position:absolute;top:-2px;left:-2px;width:9px;height:9px;border-radius:50%;background:var(--red);border:1.5px solid var(--bg-elev);}
 .wallet-chip .wc-icon{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
 .wallet-chip .wc-name{font-size:12.5px;color:var(--ink-dim);margin-top:10px;font-weight:600;}
@@ -229,7 +231,7 @@ button{cursor:pointer;border:none;background:none;}
 
 .card{
   background:color-mix(in srgb, var(--card) 38%, transparent);
-  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
+  backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
   border:1px solid color-mix(in srgb, var(--border) 65%, transparent);
   border-radius:var(--radius);padding:16px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
@@ -258,6 +260,9 @@ button{cursor:pointer;border:none;background:none;}
 .bm-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;}
 .bm-top .name{font-weight:700;color:var(--ink);}
 .bm-top .amt{color:var(--ink-faint);direction:ltr;}
+.bm-sub{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--ink-faint);margin-top:6px;}
+.bm-sub b{color:var(--ink-dim);font-weight:700;}
+.bm-trend{font-weight:700;white-space:nowrap;}
 .bm-track{height:7px;background:var(--bg-elev-2);border-radius:6px;overflow:hidden;}
 .bm-fill{height:100%;border-radius:6px;background:var(--brand);transition:width .4s;}
 .bm-fill.warn{background:var(--gold);}
@@ -268,9 +273,9 @@ button{cursor:pointer;border:none;background:none;}
   touch-action:none;
   position:fixed;bottom:calc(12px + var(--safe-bottom));left:14px;right:14px;
   max-width:492px;margin:0 auto;
-  background:color-mix(in srgb, var(--bg-elev) 9%, transparent);
-  backdrop-filter:blur(60px) saturate(280%);
-  -webkit-backdrop-filter:blur(60px) saturate(280%);
+  background:color-mix(in srgb, var(--bg-elev) 42%, transparent);
+  backdrop-filter:blur(14px) saturate(180%);
+  -webkit-backdrop-filter:blur(14px) saturate(180%);
   border:1.25px solid rgba(255,255,255,.32);
   border-radius:28px;
   display:flex;padding:8px;
@@ -304,18 +309,18 @@ button{cursor:pointer;border:none;background:none;}
   pointer-events:none;
 }
 .nav-indicator{
-  position:absolute;top:0;bottom:0;left:0;
+  position:absolute;top:6px;bottom:6px;left:0;
   width:60px;
-  border-radius:24px;
+  border-radius:21px;
   background:color-mix(in srgb, var(--bg-elev) 55%, transparent);
-  backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  
   border:0.75px solid rgba(255,255,255,.22);
   box-shadow:0 4px 14px rgba(0,0,0,.15), inset 0 1px 0 rgba(255,255,255,.25);
   transition:transform .5s cubic-bezier(.34,1.56,.64,1), width .5s cubic-bezier(.34,1.56,.64,1);
   z-index:0;
   will-change:transform;
 }
-.nav-btn{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;border-radius:16px;color:var(--ink-faint);font-size:10px;font-weight:700;transition:color .25s,transform .35s cubic-bezier(.34,1.56,.64,1);}
+.nav-btn{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 2px;border-radius:16px;color:var(--ink-dim);font-size:10.5px;font-weight:600;transition:color .25s,transform .35s cubic-bezier(.34,1.56,.64,1);}
 .nav-btn .ni{font-size:19px;display:inline-block;transition:transform .35s cubic-bezier(.34,1.56,.64,1);}
 .nav-btn.active{color:var(--brand-2);}
 [data-theme="light"] .nav-btn.active{color:var(--brand-2);}
@@ -325,9 +330,9 @@ button{cursor:pointer;border:none;background:none;}
 .nav-btn.drag-hover .ni{transform:translateY(-1px) scale(1.22);}
 
 .nav-add-btn{
-  flex:1;display:flex;align-items:center;justify-content:center;
-  margin:2px;
-  border-radius:22px;
+  flex:0 0 50px;height:50px;align-self:center;display:flex;align-items:center;justify-content:center;
+  margin:0 6px;padding:0;
+  border-radius:50%;
   background:linear-gradient(165deg, color-mix(in srgb, var(--brand-2) 92%, transparent), color-mix(in srgb, var(--brand) 88%, transparent));
   border:0.75px solid rgba(255,255,255,.35);
   font-size:24px;color:#fff;font-weight:400;
@@ -336,12 +341,24 @@ button{cursor:pointer;border:none;background:none;}
   z-index:1;position:relative;
 }
 .nav-add-btn:active{transform:scale(.86);}
+.nav-add-btn svg{width:24px;height:24px;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;}
+.ni svg,.icon-btn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;display:block;}
+.ni svg .dot,.brand-mark svg .dot{fill:currentColor;stroke:none;}
+.brand-mark svg{width:21px;height:21px;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+.brand-mark svg .dot{fill:#fff;}
+.icon-btn{color:var(--ink);}
+.icon-btn svg{width:20px;height:20px;}
+.icon-btn .ic-hide,.icon-btn .ic-sun{display:none;}
+body.privacy-on .icon-btn .ic-show{display:none;}
+body.privacy-on .icon-btn .ic-hide{display:block;color:var(--brand-2);}
+[data-theme="light"] .icon-btn .ic-moon{display:none;}
+[data-theme="light"] .icon-btn .ic-sun{display:block;}
 #app{max-width:520px;padding-bottom:calc(100px + var(--safe-bottom));}
 
 /* ---------- WALLETS VIEW ---------- */
 .wallet-card{
   background:color-mix(in srgb, var(--card) 38%, transparent);
-  backdrop-filter:blur(26px) saturate(180%);-webkit-backdrop-filter:blur(26px) saturate(180%);
+  backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
   border:1px solid color-mix(in srgb, #fff 10%, var(--border) 60%);
   border-radius:18px;padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:13px;
   transition:transform .3s cubic-bezier(.34,1.56,.64,1);
@@ -366,7 +383,7 @@ button{cursor:pointer;border:none;background:none;}
 .modal-overlay.active{display:flex;}
 .modal-sheet{
   background:color-mix(in srgb, var(--bg-elev) 45%, transparent);
-  backdrop-filter:blur(36px) saturate(190%);-webkit-backdrop-filter:blur(36px) saturate(190%);
+  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
   width:100%;max-width:520px;border-radius:32px 32px 0 0;
   border:1px solid color-mix(in srgb, #fff 15%, var(--border) 55%);border-bottom:none;
   max-height:88vh;overflow-y:auto;padding:10px 20px calc(24px + var(--safe-bottom));
@@ -383,6 +400,17 @@ button{cursor:pointer;border:none;background:none;}
 .sheet-title{font-size:18px;font-weight:800;margin-bottom:16px;}
 .field{margin-bottom:13px;}
 .field label{display:block;font-size:12.5px;color:var(--ink-dim);font-weight:700;margin-bottom:6px;}
+.amount-field{text-align:center;margin:4px 0 16px;}
+.amount-input{font-size:40px!important;font-weight:800;text-align:center;background:transparent!important;border:none!important;box-shadow:none!important;padding:6px 0!important;direction:ltr;font-variant-numeric:tabular-nums;}
+.amount-input::placeholder{color:var(--ink-faint);opacity:.6;}
+.amount-hint{font-size:11px;color:var(--ink-faint);margin-top:-2px;}
+.inline-link{background:none;border:none;padding:8px 2px 0;color:var(--brand-2);font-size:12.5px;font-weight:700;cursor:pointer;}
+.tx-more{border-top:1px solid var(--border);margin-top:4px;padding-top:4px;}
+.tx-more summary{list-style:none;cursor:pointer;padding:10px 2px;font-size:13px;font-weight:700;color:var(--brand-2);display:flex;align-items:center;gap:8px;}
+.tx-more summary::-webkit-details-marker{display:none;}
+.tx-more summary::before{content:'›';display:inline-block;transition:transform .2s;font-size:16px;}
+.tx-more[open] summary::before{transform:rotate(-90deg);}
+.tx-more summary span{font-weight:500;color:var(--ink-faint);font-size:11.5px;}
 .type-toggle{display:flex;gap:8px;margin-bottom:16px;background:var(--bg-elev-2);padding:4px;border-radius:12px;}
 .type-toggle button{flex:1;padding:10px 4px;border-radius:9px;font-weight:700;font-size:13px;color:var(--ink-faint);transition:transform .3s cubic-bezier(.34,1.56,.64,1),background .25s,color .25s;}
 .type-toggle button.active{background:var(--card);color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.15);}
@@ -548,13 +576,13 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 
   <div class="topbar">
     <div class="brand">
-      <div class="brand-mark">👛</div>
+      <div class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a1 1 0 0 1 1 1v2"/><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20h12a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 18.5 8H6.5A2.5 2.5 0 0 1 4 5.5"/><circle cx="16" cy="14" r="1.2" class="dot"/></svg></div>
       <div class="brand-text">SAM Finance<small>مصاريفي</small></div>
     </div>
     <div class="topbar-actions">
-      <button class="icon-btn privacy-toggle-btn" onclick="togglePrivacyMode()">🙈</button>
-      <button class="icon-btn" onclick="openSearch()">🔍</button>
-      <button class="icon-btn" onclick="toggleTheme()">🌗</button>
+      <button class="icon-btn privacy-toggle-btn" onclick="togglePrivacyMode()" aria-label="وضع الخصوصية"><span class="ic-show"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg></span><span class="ic-hide"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16"/><path d="M9.6 5.9A9.8 9.8 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.9 3.6M6.4 7.4A16 16 0 0 0 2.5 12s3.5 6.5 9.5 6.5a9.6 9.6 0 0 0 4.1-.9"/><path d="M9.9 9.9a2.8 2.8 0 0 0 4 4"/></svg></span></button>
+      <button class="icon-btn" onclick="openSearch()" aria-label="بحث"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m20 20-4.6-4.6"/></svg></button>
+      <button class="icon-btn theme-btn" onclick="toggleTheme()" aria-label="فاتح / غامق"><span class="ic-moon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 13.6A8.5 8.5 0 1 1 10.4 3.5a6.6 6.6 0 0 0 10.1 10.1z"/></svg></span><span class="ic-sun"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg></span></button>
     </div>
   </div>
 
@@ -718,11 +746,11 @@ body.privacy-on .money{filter:blur(7px);user-select:none;}
 
 <div class="bottomnav">
   <div class="nav-indicator" id="navIndicator"></div>
-  <button class="nav-btn active" data-v="dashboard" onclick="switchView('dashboard')"><div class="ni">🏠</div>الرئيسية</button>
-  <button class="nav-btn" data-v="transactions" onclick="switchView('transactions')"><div class="ni">📋</div>الحركات</button>
-  <button class="nav-add-btn" onclick="openTxForm()">+</button>
-  <button class="nav-btn" data-v="reports" onclick="switchView('reports')"><div class="ni">📊</div>التقارير</button>
-  <button class="nav-btn" data-v="more" onclick="switchView('more')"><div class="ni" style="position:relative;">⚙️<span id="moreAttentionDot" class="attention-dot" style="display:none;"></span></div>المزيد</button>
+  <button class="nav-btn active" data-v="dashboard" onclick="switchView('dashboard')"><div class="ni"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.2 12 3.5l8.5 6.7"/><path d="M5.5 8.8V19.5a1 1 0 0 0 1 1H10v-5.5a2 2 0 0 1 4 0v5.5h3.5a1 1 0 0 0 1-1V8.8"/></svg></div>الرئيسية</button>
+  <button class="nav-btn" data-v="transactions" onclick="switchView('transactions')"><div class="ni"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1.1" class="dot"/><circle cx="4.5" cy="12" r="1.1" class="dot"/><circle cx="4.5" cy="17.5" r="1.1" class="dot"/></svg></div>الحركات</button>
+  <button class="nav-add-btn" onclick="openTxForm()" aria-label="حركة جديدة"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></button>
+  <button class="nav-btn" data-v="reports" onclick="switchView('reports')"><div class="ni"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17"/><rect x="5.5" y="11" width="3" height="6.5" rx="1"/><rect x="10.5" y="5.5" width="3" height="12" rx="1"/><rect x="15.5" y="13.5" width="3" height="4" rx="1"/></svg></div>التقارير</button>
+  <button class="nav-btn" data-v="more" onclick="switchView('more')"><div class="ni" style="position:relative;"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/></svg><span id="moreAttentionDot" class="attention-dot" style="display:none;"></span></div>المزيد</button>
 </div>
 
 <!-- ============ MODAL: overlay host, content injected ============ -->
@@ -784,6 +812,7 @@ function defaultState(){
     assets:[],
     merchants:[],
     installments:[],
+    weeklyChallenge:{target:null, weekStart:null},
   };
 }
 
@@ -878,9 +907,57 @@ function load(){
   document.documentElement.setAttribute('data-theme', state.settings.theme);
   document.body.setAttribute('data-theme', state.settings.theme);
 }
+let saveFailWarned = false;
 function save(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    saveFailWarned = false;
+  }catch(e){
+    // Storage full (usually large receipt photos). Never fail silently:
+    // the in-memory data would otherwise vanish when the app is closed.
+    if(!saveFailWarned){
+      saveFailWarned = true;
+      setTimeout(()=>toast('⚠️ مساحة التخزين مليانة والتعديل ده ما اتحفظش. اعمل نسخة احتياطية وامسح صور إيصالات قديمة', 6000), 50);
+    }
+    return false;
+  }
   checkStorageHealth();
+  return true;
+}
+/* Shrink a photo to a storage-friendly JPEG. Steps down size/quality until
+   it fits ~350KB, so a single photo can never fill the app's storage. */
+function encodeImage(img, maxSide, quality){
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width*scale); c.height = Math.round(img.height*scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', quality);
+}
+function compressImageDataUrl(dataUrl){
+  return new Promise(resolve=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const steps = [[1200,0.62],[1000,0.5],[800,0.42],[640,0.38]];
+        let out = dataUrl;
+        for(const [side,q] of steps){ out = encodeImage(img, side, q); if(out.length <= 350000) break; }
+        resolve(out.length < dataUrl.length ? out : dataUrl);
+      }catch(e){ resolve(dataUrl); }
+    };
+    img.onerror = ()=>resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+/* One-time cleanup: shrink any oversized receipts saved by older versions. */
+async function shrinkStoredReceipts(){
+  let changed = false;
+  for(const t of state.transactions){
+    if(t.receipt && t.receipt.length > 400000){
+      const small = await compressImageDataUrl(t.receipt);
+      if(small.length < t.receipt.length){ t.receipt = small; changed = true; }
+    }
+  }
+  if(changed) save();
 }
 let storageWarnShown = false;
 function checkStorageHealth(){
@@ -1073,19 +1150,31 @@ function totalBaseBalance(){
 /* =========================================================================
    RECURRING PROCESSING — actually deducts when due
    ========================================================================= */
-function addInterval(dateStr, freq){
+/* Add whole months while keeping the intended day, clamped to month end
+   (31 Jan -> 28 Feb -> 31 Mar). Plain setMonth() rolls overflow into the
+   next month (31 Jan -> 3 Mar) and the date then drifts forever. */
+function addMonthsClamped(dateStr, months, anchorDay){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const day = anchorDay || d;
+  const first = new Date(y, m-1+months, 1);
+  const last = new Date(first.getFullYear(), first.getMonth()+1, 0).getDate();
+  return localDateStr(new Date(first.getFullYear(), first.getMonth(), Math.min(day, last)));
+}
+function addInterval(dateStr, freq, anchorDay){
+  if(freq==='monthly') return addMonthsClamped(dateStr, 1, anchorDay);
+  if(freq==='yearly') return addMonthsClamped(dateStr, 12, anchorDay);
   const d = new Date(dateStr+'T00:00:00');
   if(freq==='daily') d.setDate(d.getDate()+1);
   else if(freq==='weekly') d.setDate(d.getDate()+7);
-  else if(freq==='monthly') d.setMonth(d.getMonth()+1);
-  else if(freq==='yearly') d.setFullYear(d.getFullYear()+1);
   return localDateStr(d);
 }
+function installmentDueDate(ins, index){ return addMonthsClamped(ins.startDate, index); }
 function processRecurring(){
   const today = todayStr();
   let applied = 0;
   state.recurring.forEach(r=>{
     if(r.paused) return;
+    if(!r.anchorDay) r.anchorDay = +r.nextDate.slice(8,10);
     let guard = 0;
     while(r.nextDate <= today && guard < 36){
       state.transactions.push({
@@ -1094,7 +1183,7 @@ function processRecurring(){
       });
       applied++; guard++;
       if(r.frequency==='once'){ r.paused = true; break; }
-      r.nextDate = addInterval(r.nextDate, r.frequency);
+      r.nextDate = addInterval(r.nextDate, r.frequency, r.anchorDay);
     }
   });
   if(applied>0) save();
@@ -1343,7 +1432,7 @@ function renderDashboard(){
   const ws = document.getElementById('dashWallets');
   ws.innerHTML = sortedWallets().map(w=>`
     <div class="wallet-chip" onclick="switchView('wallets')">
-      <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div><button class="quick-transfer-btn" onclick="event.stopPropagation();openTxForm('transfer');setTimeout(()=>{const sel=document.getElementById('txFromWallet');if(sel)sel.value='${w.id}';},60);">🔁</button></div>
+      <div class="wc-top"><div class="wc-icon" style="background:${w.color}22;color:${w.color};">${w.icon}</div><button class="quick-transfer-btn" onclick="event.stopPropagation();openTxForm('transfer');setTimeout(()=>{const sel=document.getElementById('txFromWallet');if(sel)sel.value='${w.id}';},60);" aria-label="تحويل"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h12l-3.5-3.5M17 17H5l3.5 3.5"/></svg></button></div>
       <div class="wc-name">${esc(w.name)}</div>
       <div class="wc-bal money">${fmt(walletBalance(w.id))} ${w.currency}</div>
     </div>`).join('') + `<div class="wallet-chip add-new" onclick="openWalletForm()"><div style="font-size:22px;">+</div><div style="font-size:11.5px;">محفظة جديدة</div></div>`;
@@ -1401,8 +1490,9 @@ function renderDashboard(){
       const pct = Math.min(100,(spent/b.limit)*100);
       const cls = pct>=100?'over':(pct>=80?'warn':'');
       return `<div class="budget-mini">
-        <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)}</span></div>
+        <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt money">${fmt(spent)} / ${fmt(b.limit)}</span></div>
         <div class="bm-track"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
+        ${budgetSubLine(b, spent)}
       </div>`;
     }).join('');
   }
@@ -1413,46 +1503,63 @@ function renderDashboard(){
   recWrap.innerHTML = recent.length? recent.map(txRowHTML).join('') : emptyStateHTML('مفيش حركات لسه','دوس على + وسجل أول حركة','✨');
 }
 
+/* A budget on a parent category also counts spending in its subcategories. */
+function categoryFamily(categoryId){
+  const ids = new Set([categoryId]);
+  state.categories.forEach(c=>{ if(c.parentId===categoryId) ids.add(c.id); });
+  return ids;
+}
 function monthSpentForCategory(categoryId){
   const {start,end} = currentMonthRange();
-  return state.transactions.filter(t=>t.type==='expense' && t.categoryId===categoryId && t.date>=start && t.date<=end)
+  const fam = categoryFamily(categoryId);
+  return state.transactions.filter(t=>t.type==='expense' && fam.has(t.categoryId) && t.date>=start && t.date<=end)
     .reduce((s,t)=> s + toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency), 0);
 }
-function lastMonthSpentForCategory(categoryId){
+function lastMonthSpentForCategory(categoryId, sameDayOnly){
   const now = new Date();
   const d = new Date(now.getFullYear(), now.getMonth()-1, 1);
   const start = localDateStr(new Date(d.getFullYear(),d.getMonth(),1));
-  const end = localDateStr(new Date(d.getFullYear(),d.getMonth()+1,0));
-  return state.transactions.filter(t=>t.type==='expense' && t.categoryId===categoryId && t.date>=start && t.date<=end)
+  const lastDay = new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  // sameDayOnly: compare like with like (1st..today vs 1st..same day last month)
+  const end = localDateStr(new Date(d.getFullYear(),d.getMonth(), sameDayOnly ? Math.min(now.getDate(), lastDay) : lastDay));
+  const fam = categoryFamily(categoryId);
+  return state.transactions.filter(t=>t.type==='expense' && fam.has(t.categoryId) && t.date>=start && t.date<=end)
     .reduce((s,t)=> s + toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency), 0);
 }
 function budgetTrendArrow(categoryId, current){
-  const last = lastMonthSpentForCategory(categoryId);
+  const last = lastMonthSpentForCategory(categoryId, true);
   if(last<=0) return '';
   const diff = ((current-last)/last)*100;
-  if(Math.abs(diff)<5) return '<span style="color:var(--ink-faint);">▬</span>';
+  if(Math.abs(diff)<5) return '<span class="bm-trend">زي الشهر اللي فات</span>';
   const up = diff>0;
-  return `<span style="color:${up?'var(--red)':'var(--brand-2)'};font-weight:800;">${up?'▲':'▼'} ${Math.abs(diff).toFixed(0)}%</span>`;
+  return `<span class="bm-trend" style="color:${up?'var(--red)':'var(--income)'};">${up?'▲':'▼'} ${Math.abs(diff).toFixed(0)}% عن الشهر اللي فات</span>`;
+}
+function budgetSubLine(b, spent){
+  const usedPct = Math.round((spent/b.limit)*100);
+  const left = b.limit - spent;
+  return `<div class="bm-sub"><span>${usedPct}% مستخدم · ${left>=0?'باقي <b class="money">'+fmt(left)+'</b>':'زيادة <b class="money" style="color:var(--red);">'+fmt(-left)+'</b>'}</span>${budgetTrendArrow(b.categoryId, spent)}</div>`;
 }
 
 function emptyStateHTML(title,sub,icon){
   return `<div class="empty-state"><div class="e-icon">${icon||'🗂️'}</div><div class="e-title">${title}</div><div class="e-sub">${sub}</div></div>`;
 }
 
-function txRowHTML(t){
+function txRowHTML(t, opts){
+  const showDate = !(opts && opts.hideDate);
   let icon,title,sub,amtClass,amtText,bg;
   const w = walletById(t.walletId);
   if(t.type==='transfer'){
     const tw = walletById(t.toWalletId);
     icon='🔁'; title = `تحويل: ${w?w.name:'—'} ← ${tw?tw.name:'—'}`;
-    sub = fmtDate(t.date) + (t.note?(' · '+t.note):'');
-    amtClass='neu'; amtText = '-'+fmt(t.amount)+' '+(w?w.currency:'');
-    bg = 'var(--blue)22'; icon='<span style="color:var(--blue)">🔁</span>';
+    sub = [showDate?fmtDate(t.date):'', t.note||''].filter(Boolean).join(' · ') || 'تحويل بين محافظك';
+    // Moving money between your own wallets is not spending: no minus sign.
+    amtClass='neu'; amtText = fmt(t.amount)+' '+(w?w.currency:'');
+    bg = 'color-mix(in srgb, var(--blue) 18%, transparent)'; icon='<span style="color:var(--blue)">🔁</span>';
   } else {
     const c = catById(t.categoryId);
     icon = c?c.icon:(t.type==='income'?'💰':'🧾');
     title = t.note || (c?c.name:(t.type==='income'?'دخل':'صرف'));
-    sub = (w?w.name:'—') + ' · ' + fmtDate(t.date);
+    sub = (w?w.name:'—') + (showDate ? ' · ' + fmtDate(t.date) : '');
     amtClass = t.type==='income'?'pos':'neg';
     amtText = (t.type==='income'?'+':'-') + fmt(t.amount) + ' ' + (w?w.currency:'');
     if(t.type==='income') bg = 'var(--income-dim)';
@@ -1666,7 +1773,7 @@ function renderTransactions(){
 function deletableTxRowHTML(t){
   return `<div class="swipe-wrap" data-txid="${t.id}">
     <div class="swipe-delete-btn" onclick="if(confirm('تحذف الحركة دي؟')){haptic(15);deleteTx('${t.id}');}">🗑️<span>حذف</span></div>
-    <div class="swipe-content card" style="padding:4px 12px;">${txRowHTML(t)}</div>
+    <div class="swipe-content card" style="padding:4px 12px;">${txRowHTML(t,{hideDate:true})}</div>
   </div>`;
 }
 function openSearch(){
@@ -1791,6 +1898,7 @@ function bindSwipeContainer(containerId){
     const dx = e.touches[0].clientX - swipeStartX;
     const base = swipeActiveWrap.classList.contains('open') ? -76 : 0;
     swipeCurrentX = Math.max(-76, Math.min(0, dx + base));
+    if(swipeCurrentX < -2) swipeActiveWrap.classList.add('swiping');
     swipeActiveWrap.querySelector('.swipe-content').style.transform = `translateX(${swipeCurrentX}px)`;
   }, {passive:true});
   el.addEventListener('touchend', ()=>{
@@ -1798,6 +1906,7 @@ function bindSwipeContainer(containerId){
     swipeDragging = false;
     const content = swipeActiveWrap.querySelector('.swipe-content');
     content.classList.remove('dragging');
+    swipeActiveWrap.classList.remove('swiping');
     if(swipeCurrentX < -40){ haptic(8); openSwipe(swipeActiveWrap); } else { closeSwipe(swipeActiveWrap); }
     swipeActiveWrap = null;
   }, {passive:true});
@@ -2142,7 +2251,7 @@ function setWeeklyChallenge(){
 function renderWeeklyChallenge(){
   const host = document.getElementById('weeklyChallengeCard');
   if(!host) return;
-  const wc = state.weeklyChallenge;
+  const wc = state.weeklyChallenge || (state.weeklyChallenge = {target:null, weekStart:null});
   const thisWeek = currentWeekStart();
   if(!wc.target || wc.weekStart!==thisWeek){
     host.innerHTML = `<div class="card" style="margin-top:10px;text-align:center;" onclick="setWeeklyChallenge()">
@@ -2211,8 +2320,8 @@ function calcAppOpenStreak(){
 }
 function calcBudgetStreak(){
   if(state.budgets.length===0) return 0;
-  const catIds = new Set(state.budgets.map(b=>b.categoryId));
-  const relevantTx = state.transactions.filter(t=>t.type==='expense' && catIds.has(t.categoryId));
+  const fams = {}; state.budgets.forEach(b=>{ fams[b.categoryId] = categoryFamily(b.categoryId); });
+  const relevantTx = state.transactions.filter(t=>t.type==='expense' && Object.values(fams).some(f=>f.has(t.categoryId)));
   const now = new Date();
   let streak = 0;
   for(let i=0;i<90;i++){
@@ -2223,7 +2332,7 @@ function calcBudgetStreak(){
     for(const b of state.budgets){
       let spent = 0;
       relevantTx.forEach(t=>{
-        if(t.categoryId!==b.categoryId || t.date<monthStart || t.date>dateStr) return;
+        if(!fams[b.categoryId].has(t.categoryId) || t.date<monthStart || t.date>dateStr) return;
         const cur = walletById(t.walletId)?.currency||state.settings.baseCurrency;
         spent += toBase(t.amount,cur);
       });
@@ -2714,8 +2823,9 @@ function budgetsPanelHTML(){
     const pct = Math.min(100,(spent/b.limit)*100);
     const cls = pct>=100?'over':(pct>=80?'warn':'');
     return `<div class="card" style="margin-top:10px;" onclick="openBudgetForm('${b.categoryId}')">
-      <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt">${budgetTrendArrow(b.categoryId,spent)} ${fmt(spent)} / ${fmt(b.limit)} ${state.settings.baseCurrency}</span></div>
+      <div class="bm-top"><span class="name">${c?c.icon+' '+esc(c.name):'—'}</span><span class="amt money">${fmt(spent)} / ${fmt(b.limit)} ${state.settings.baseCurrency}</span></div>
       <div class="bm-track" style="margin-top:6px;"><div class="bm-fill ${cls}" style="width:${pct}%;"></div></div>
+      ${budgetSubLine(b, spent)}
     </div>`;
   }).join('');
   return html;
@@ -2875,7 +2985,7 @@ function saveRecurring(id){
   if(!wSel){toast('اختار محفظة');return;}
   if(!cSel){toast('اختار تصنيف');return;}
   if(!nextDate){toast('اختار تاريخ');return;}
-  const obj = {name, amount, frequency, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, nextDate, type};
+  const obj = {name, amount, frequency, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, nextDate, type, anchorDay:+nextDate.slice(8,10)};
   let priceIncreaseMsg = null;
   if(id){
     const existing = state.recurring.find(r=>r.id===id);
@@ -2900,8 +3010,8 @@ function deleteRecurring(id){
 function debtsPanelHTML(){
   let html = `<button class="btn-primary" onclick="openDebtForm()">+ دين جديد</button>`;
   if(state.debts.length===0){ html+=emptyStateHTML('مفيش ديون مسجلة','','🤝'); return html; }
-  const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
-  const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0);
+  const owe = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency),0);
+  const owed = state.debts.filter(d=>d.direction==='owed'&&!d.settled).reduce((s,d)=>s+toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency),0);
   html += `<div class="stat-grid" style="margin-bottom:14px;">
     <div class="stat-box"><div class="sv money" style="color:var(--red);">${fmt(owe)}</div><div class="sl">باقي عليك</div></div>
     <div class="stat-box"><div class="sv money" style="color:var(--income);">${fmt(owed)}</div><div class="sl">باقي ليك</div></div>
@@ -3012,7 +3122,7 @@ function saveDebtPayment(id){
   if(!wSel){toast('اختار محفظة');return;}
   if(!date){toast('اختار تاريخ');return;}
   const txType = d.direction==='owe' ? 'expense' : 'income';
-  state.transactions.push({id:uid(), type:txType, walletId:wSel.dataset.w, categoryId: d.direction==='owe'?'cat_debt_out':'cat_debt_in', amount, note:'سداد دين: '+d.person, date, debtId:d.id});
+  state.transactions.push({id:uid(), type:txType, walletId:wSel.dataset.w, categoryId: d.direction==='owe'?'cat_debt_out':'cat_debt_in', amount, note:'سداد دين: '+d.person, date, debtId:d.id, debtPayment:true});
   d.paidAmount = (d.paidAmount||0) + amount;
   const justSettled = !d.settled && d.paidAmount >= d.amount - 0.001;
   if(d.paidAmount >= d.amount - 0.001){ d.settled = true; d.paidAmount = d.amount; }
@@ -3778,7 +3888,15 @@ function importBackup(){
       const data = JSON.parse(e.target.result);
       if(!data.wallets || !data.transactions){ toast('الملف مش صالح'); return; }
       if(!confirm('هيتم استبدال كل بياناتك الحالية. متأكد؟')) return;
-      state = data; save(); renderAll(); closePanel(); toast('اترجعت البيانات بنجاح');
+      // Run the backup through the same migration as a normal app start, so
+      // backups made by older versions get every field the app expects.
+      state = data;
+      if(!save()){ return; }
+      load();
+      document.documentElement.setAttribute('data-theme', state.settings.theme);
+      document.body.setAttribute('data-theme', state.settings.theme);
+      applyAccentTheme(); applyFontScale();
+      renderAll(); closePanel(); toast('اترجعت البيانات بنجاح');
     }catch(err){ toast('فشل قراءة الملف'); }
   };
   reader.readAsText(input.files[0]);
@@ -4055,7 +4173,7 @@ function computeBadges(){
       state.budgets.forEach(b=>{
         let spent=0;
         state.transactions.forEach(t=>{
-          if(t.type!=='expense'||t.categoryId!==b.categoryId||t.date<s||t.date>e) return;
+          if(t.type!=='expense'||!categoryFamily(b.categoryId).has(t.categoryId)||t.date<s||t.date>e) return;
           spent += toBase(t.amount, walletById(t.walletId)?.currency||state.settings.baseCurrency);
         });
         if(spent>b.limit) overBudget=true;
@@ -4141,7 +4259,7 @@ function installmentsPanelHTML(){
     const remaining = ins.numInstallments - ins.paidCount;
     const done = remaining<=0;
     const pct = Math.min(100,(ins.paidCount/ins.numInstallments)*100);
-    const nextDate = addInterval(ins.startDate, 'monthly');
+    const nextDate = installmentDueDate(ins, ins.paidCount);
     return `<div class="debt-card" style="opacity:${done?0.6:1};">
       <div onclick="openInstallmentForm('${ins.id}')">
         <div class="debt-top">
@@ -4224,8 +4342,7 @@ function calendarPanelHTML(){
   });
   state.installments.forEach(ins=>{
     if(ins.paidCount>=ins.numInstallments) return;
-    let due = ins.startDate;
-    for(let i=0;i<ins.paidCount;i++) due = addInterval(due,'monthly');
+    const due = installmentDueDate(ins, ins.paidCount);
     events.push({date:due, icon:'💳', label:'قسط: '+ins.itemName, sub: fmt(ins.installmentAmount)+' '+state.settings.baseCurrency, color:'var(--red)', subIsMoney:true});
   });
   const today = todayStr();
@@ -4280,7 +4397,7 @@ function zakatPanelHTML(){
   const cashTotal = totalBaseBalance();
   const goldAssetsTotal = state.assets.filter(a=>a.isGold).reduce((s,a)=>s+assetValueOf(a),0);
   const otherAssetsTotal = state.assets.filter(a=>!a.isGold).reduce((s,a)=>s+toBase(a.value,a.currency),0);
-  const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+(d.amount-(d.paidAmount||0)),0)
+  const debtsOwed = state.debts.filter(d=>d.direction==='owe'&&!d.settled).reduce((s,d)=>s+toBase(d.amount-(d.paidAmount||0), d.currency||state.settings.baseCurrency),0)
     + state.installments.reduce((s,ins)=> s + Math.max(0,(ins.numInstallments-ins.paidCount)*ins.installmentAmount), 0);
   const zakatableWealth = Math.max(0, cashTotal + goldAssetsTotal + otherAssetsTotal - debtsOwed);
   const aboveNisab = pricePerGram24k>0 && zakatableWealth >= nisabValue;
@@ -4418,8 +4535,20 @@ function saveWallet(id){
 function deleteWallet(id){
   if(state.wallets.length<=1){ toast('لازم يفضل محفظة واحدة على الأقل'); return; }
   const hasTx = state.transactions.some(t=>t.walletId===id||t.toWalletId===id);
-  if(hasTx && !confirm('المحفظة دي فيها حركات مسجلة، هتتمسح كل حركاتها كمان. متأكد؟')) return;
-  state.transactions = state.transactions.filter(t=>t.walletId!==id && t.toWalletId!==id);
+  if(hasTx && !confirm('المحفظة دي فيها حركات مسجلة، هتتمسح حركاتها كمان (أرصدة المحافظ التانية مش هتتأثر). لو عايز تحتفظ بتاريخها استخدم "تجميد" بدل الحذف. متأكد؟')) return;
+  // Transfers with another wallet are kept as plain income/expense on that
+  // wallet, so its balance stays exactly the same.
+  state.transactions = state.transactions.flatMap(t=>{
+    if(t.type==='transfer'){
+      if(t.walletId===id && t.toWalletId===id) return [];
+      if(t.walletId===id){ const {toWalletId,toAmount,...rest}=t; return [{...rest, type:'income', walletId:toWalletId, amount:toAmount, categoryId:'cat_other_i', note:(t.note?t.note+' · ':'')+'تحويل من محفظة اتمسحت'}]; }
+      if(t.toWalletId===id){ const {toWalletId,toAmount,...rest}=t; return [{...rest, type:'expense', categoryId:'cat_other_e', note:(t.note?t.note+' · ':'')+'تحويل لمحفظة اتمسحت'}]; }
+      return [t];
+    }
+    return t.walletId===id ? [] : [t];
+  });
+  state.recurring.forEach(r=>{ if(r.walletId===id) r.paused = true; });
+  state.templates = state.templates.filter(tp=>tp.walletId!==id);
   state.wallets = state.wallets.filter(w=>w.id!==id);
   save(); closeModal(); renderAll(); toast('اتمسحت المحفظة');
 }
@@ -4533,17 +4662,16 @@ function txFormBodyHTML(type, ex){
   }
   const cats = state.categories.filter(c=>c.type===type);
   const showSplitOption = (type==='expense' || type==='income') && !ex;
+  const hasExtras = !!(ex && (ex.placeId || ex.note || (ex.tags&&ex.tags.length) || ex.receipt));
   return `
-    ${showSplitOption?`<div class="field"><label>${type==='income'?'استلمت في':'الدفع من'}</label>
-      <div class="type-toggle" id="txPayMode">
-        <button type="button" class="active" data-t="single" onclick="toggleType(this,'txPayMode');togglePayMode('single')">محفظة واحدة</button>
-        <button type="button" data-t="split" onclick="toggleType(this,'txPayMode');togglePayMode('split')">أكتر من محفظة</button>
-      </div>
-    </div>`:''}
     <div id="txSingleSection">
-      <div class="field"><label>المبلغ</label><input id="txAmount" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0.00 (اكتب حساب زي 150+80)" style="font-size:22px;font-weight:800;text-align:center;" onblur="evalCalcField(this)"></div>
-      <div class="field"><label>المحفظة</label>
+      <div class="field amount-field">
+        <input id="txAmount" class="amount-input" type="text" inputmode="decimal" value="${ex?ex.amount:''}" placeholder="0" onblur="evalCalcField(this)" aria-label="المبلغ">
+        <div class="amount-hint">تقدر تكتب حساب زي <bdi dir="ltr">150+80</bdi></div>
+      </div>
+      <div class="field"><label>${type==='income'?'استلمتها في':'دفعتها من'}</label>
         <div class="chip-select" id="txWalletChips">${sortedWallets().map(w=>`<button type="button" class="${ex?(ex.walletId===w.id?'sel':''):(w===sortedWallets()[0]?'sel':'')}" data-w="${w.id}" onclick="selectChip(this,'txWalletChips')">${w.icon} ${esc(w.name)}</button>`).join('')}</div>
+        ${showSplitOption?`<button type="button" class="inline-link" onclick="togglePayMode('split')">قسّمها على أكتر من محفظة</button>`:''}
       </div>
     </div>
     ${showSplitOption?`<div id="txSplitSection" style="display:none;">
@@ -4551,20 +4679,24 @@ function txFormBodyHTML(type, ex){
       <div id="splitRowsWrap"></div>
       <button type="button" class="btn-secondary" style="margin-top:4px;" onclick="addTxSplitRow()">+ ضيف محفظة</button>
       <div id="splitTotalPreview" style="margin-top:12px;"></div>
+      <button type="button" class="inline-link" onclick="togglePayMode('single')">رجوع لمحفظة واحدة</button>
     </div>`:''}
     <div class="field"><label>التصنيف</label>
       <div class="chip-select" id="txCatChips">${cats.map(c=>`<button type="button" class="${ex&&ex.categoryId===c.id?'sel':''}" data-cat="${c.id}" onclick="selectChip(this,'txCatChips')">${catChipLabel(c)}</button>`).join('')}</div>
     </div>
     <div class="field"><label>التاريخ</label><input id="txDate" type="date" value="${ex?ex.date:todayStr()}"></div>
-    <div class="field"><label>المكان (اختياري)</label>
-      <input id="txPlaceInput" value="${ex&&ex.placeId?esc(merchantById(ex.placeId)?.name||''):''}" placeholder="مثال: كارفور، أوبر..." oninput="renderPlaceSuggestions()">
-      <div class="chip-select" id="txPlaceChips" style="margin-top:8px;"></div>
-    </div>
-    <div class="field"><label>ملاحظة (اختياري)</label><input id="txNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="مثال: عشا مع الأصحاب"></div>
-    <div class="field"><label>تاجز (اختياري، افصل بفاصلة)</label><input id="txTags" value="${ex&&ex.tags?ex.tags.join('، '):''}" placeholder="مثال: شغل، استرداد ضريبي"></div>
-    <div class="field"><label>إيصال (اختياري)</label><input type="file" accept="image/*" id="txReceipt" onchange="previewReceipt(this)">
-      <img id="receiptPreview" class="receipt-thumb" style="display:${ex&&ex.receipt?'block':'none'};" src="${ex&&ex.receipt?ex.receipt:''}">
-    </div>
+    <details class="tx-more" ${hasExtras?'open':''}>
+      <summary>تفاصيل إضافية <span>مكان، ملاحظة، تاجز، إيصال</span></summary>
+      <div class="field"><label>المكان</label>
+        <input id="txPlaceInput" value="${ex&&ex.placeId?esc(merchantById(ex.placeId)?.name||''):''}" placeholder="مثال: كارفور، أوبر..." oninput="renderPlaceSuggestions()">
+        <div class="chip-select" id="txPlaceChips" style="margin-top:8px;"></div>
+      </div>
+      <div class="field"><label>ملاحظة</label><input id="txNote" value="${ex&&ex.note?esc(ex.note):''}" placeholder="مثال: عشا مع الأصحاب"></div>
+      <div class="field"><label>تاجز (افصل بفاصلة)</label><input id="txTags" value="${ex&&ex.tags?ex.tags.join('، '):''}" placeholder="مثال: شغل، استرداد ضريبي"></div>
+      <div class="field"><label>إيصال</label><input type="file" accept="image/*" id="txReceipt" onchange="previewReceipt(this)">
+        <img id="receiptPreview" class="receipt-thumb" style="display:${ex&&ex.receipt?'block':'none'};" src="${ex&&ex.receipt?ex.receipt:''}">
+      </div>
+    </details>
   `;
 }
 let currentTxType='expense';
@@ -4644,10 +4776,10 @@ function previewReceipt(input){
   const file = input.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = e=>{
-    pendingReceiptData = e.target.result;
+  reader.onload = async e=>{
+    pendingReceiptData = await compressImageDataUrl(e.target.result);
     const img = document.getElementById('receiptPreview');
-    img.src = pendingReceiptData; img.style.display='block';
+    if(img){ img.src = pendingReceiptData; img.style.display='block'; }
   };
   reader.readAsDataURL(file);
 }
@@ -4699,7 +4831,7 @@ function saveTx(id){
     }
     const obj = {type, walletId:wSel.dataset.w, categoryId:cSel.dataset.cat, amount, note, date, tags, placeId};
     if(pendingReceiptData) obj.receipt = pendingReceiptData;
-    if(id){ Object.assign(state.transactions.find(t=>t.id===id), obj); }
+    if(id){ const ex = state.transactions.find(t=>t.id===id); applyTxLink(ex, -1); Object.assign(ex, obj); applyTxLink(ex, +1); }
     else { state.transactions.push({id:uid(), ...obj}); }
   }
   pendingReceiptData = null;
@@ -4712,13 +4844,41 @@ function openTxDetail(id){
   bindTxTypeSwitch();
   if(t.type!=='transfer') renderPlaceSuggestions();
 }
+/* A transaction can drive another record (a debt payment, a goal
+   contribution, an installment, an asset sale). sign=+1 applies its effect,
+   sign=-1 reverses it, so delete / undo / edit keep both sides in sync. */
+function isDebtPaymentTx(t){ return t.debtPayment===true || (t.note||'').indexOf('سداد دين')===0; }
+function applyTxLink(t, sign){
+  if(t.debtId && isDebtPaymentTx(t)){
+    const d = state.debts.find(x=>x.id===t.debtId);
+    if(d){
+      d.paidAmount = Math.max(0, (d.paidAmount||0) + sign*t.amount);
+      if(sign<0 && d.settled && d.paidAmount < d.amount-0.001) d.settled = false;
+      if(sign>0 && d.paidAmount >= d.amount-0.001){ d.settled = true; d.paidAmount = d.amount; }
+    }
+  }
+  if(t.goalId){
+    const g = state.goals.find(x=>x.id===t.goalId);
+    if(g){ const delta = t.type==='expense' ? t.amount : -t.amount; g.current = Math.max(0, (g.current||0) + sign*delta); }
+  }
+  if(t.installmentId){
+    const ins = state.installments.find(x=>x.id===t.installmentId);
+    if(ins) ins.paidCount = Math.max(0, Math.min(ins.numInstallments, (ins.paidCount||0) + sign));
+  }
+  if(t.assetId && t.categoryId==='cat_asset_sell'){
+    const a = state.assets.find(x=>x.id===t.assetId);
+    if(a){ if(sign<0){ a.sold=false; a.soldDate=null; a.salePrice=null; } else { a.sold=true; a.soldDate=t.date; a.salePrice=t.amount; } }
+  }
+}
 function deleteTx(id){
   const idx = state.transactions.findIndex(t=>t.id===id);
   if(idx===-1) return;
   const [removed] = state.transactions.splice(idx,1);
+  applyTxLink(removed, -1);
   save(); closeModal(); closeAllSwipes(); renderAll();
   toastWithUndo('اتمسحت الحركة', ()=>{
     state.transactions.splice(idx,0,removed);
+    applyTxLink(removed, +1);
     save(); renderAll(); toast('اترجعت الحركة');
   });
 }
@@ -4902,6 +5062,7 @@ function init(){
   applyAccentTheme();
   applyFontScale();
   processRecurring();
+  setTimeout(shrinkStoredReceipts, 1500);
   if(state.settings.pin){ checkAppLock(); }
   renderAll();
   requestAnimationFrame(()=>moveNavIndicator());
